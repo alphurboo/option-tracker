@@ -28,7 +28,7 @@
         <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
           <i class="fa-solid fa-arrows-spin text-green-500"></i> Wheel & Options Master
         </h1>
-        <p class="text-xs text-gray-400">期權收租 · 正股已實現盈虧 · 輪次保本價追蹤 · 損益日曆</p>
+        <p class="text-xs text-gray-400">期權收租 · 正股已實現盈虧 · 資金增長曲線 · 損益日曆</p>
       </div>
       <div class="flex gap-2">
         <button @click="exportData" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700">
@@ -178,7 +178,7 @@
             </div>
           </div>
 
-          <!-- 模式 1: 正股已賣出 (結算損益視圖) -->
+          <!-- 模式 1: 正股已賣出 -->
           <div v-if="getStockBasis(ticker).isSold" class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
             <div class="bg-black/30 p-2.5 rounded-xl">
               <span class="text-[10px] text-gray-400 block font-sans">買入 ➔ 賣出價</span>
@@ -199,14 +199,14 @@
               </span>
             </div>
             <div class="bg-black/30 p-2.5 rounded-xl border border-yellow-500/40">
-              <span class="text-[10px] text-yellow-400 block font-sans font-bold">本輪 Wheel 總結算淨損益</span>
+              <span class="text-[10px] text-yellow-400 block font-sans font-bold">本輪 Wheel 總淨損益</span>
               <span class="text-sm font-extrabold" :class="(calculateStockRealizedPnL(ticker) + group.totalCollected) >= 0 ? 'text-green-400' : 'text-red-400'">
                 {{ (calculateStockRealizedPnL(ticker) + group.totalCollected) >= 0 ? '+' : '' }}${{ (calculateStockRealizedPnL(ticker) + group.totalCollected).toFixed(0) }}
               </span>
             </div>
           </div>
 
-          <!-- 模式 2: 正股持倉中 (保本價追蹤視圖) -->
+          <!-- 模式 2: 正股持倉中 -->
           <div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
             <div class="bg-black/30 p-2.5 rounded-xl">
               <span class="text-[10px] text-gray-400 block font-sans">正股買入成本</span>
@@ -298,7 +298,7 @@
       </div>
     </section>
 
-    <!-- TAB 3: 損益日曆 (Calendar View) -->
+    <!-- TAB 3: 損益日曆 (Calendar View - 已修復 NaN) -->
     <section v-if="currentTab === 'calendar'" class="card p-5 rounded-2xl shadow-xl">
       <div class="flex justify-between items-center mb-4">
         <button @click="changeMonth(-1)" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold text-gray-300">
@@ -310,17 +310,17 @@
         </button>
       </div>
 
-      <!-- 每月 Total 統計橫幅 (包含正股損益穿透) -->
+      <!-- 每月 Total 統計橫幅 -->
       <div class="mb-5 p-3.5 bg-gradient-to-r from-zinc-900 to-zinc-800/80 rounded-xl border border-zinc-700/70 flex justify-between items-center">
         <div>
           <span class="text-xs text-gray-400 block font-sans">{{ calendarYear }} 年 {{ calendarMonth + 1 }} 月 投資組合總淨損益</span>
           <span class="text-[11px] text-gray-500 font-mono">
-            期權租金: ${{ currentMonthStats.optTotal.toFixed(0) }} | 正股結算: {{ currentMonthStats.stockTotal >= 0 ? '+' : '' }}${{ currentMonthStats.stockTotal.toFixed(0) }}
+            期權租金: ${{ (currentMonthStats.optTotal || 0).toFixed(0) }} | 正股結算: {{ (currentMonthStats.stockTotal || 0) >= 0 ? '+' : '' }}${{ (currentMonthStats.stockTotal || 0).toFixed(0) }}
           </span>
         </div>
         <div class="text-right">
-          <span :class="['text-xl md:text-2xl font-black font-mono tracking-tight', currentMonthStats.total >= 0 ? 'text-green-400' : 'text-red-400']">
-            {{ currentMonthStats.total >= 0 ? '+' : '' }}${{ currentMonthStats.total.toFixed(2) }}
+          <span :class="['text-xl md:text-2xl font-black font-mono tracking-tight', (currentMonthStats.total || 0) >= 0 ? 'text-green-400' : 'text-red-400']">
+            {{ (currentMonthStats.total || 0) >= 0 ? '+' : '' }}${{ (currentMonthStats.total || 0).toFixed(2) }}
           </span>
         </div>
       </div>
@@ -330,10 +330,12 @@
         <div v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d" class="text-gray-500 font-bold pb-2">{{ d }}</div>
         <div v-for="(day, idx) in calendarDays" :key="idx"
           :class="['h-24 p-1.5 rounded-xl border flex flex-col justify-between text-left transition overflow-hidden',
-                   day.isCurrentMonth ? 'bg-zinc-900 border-zinc-800' : 'bg-black/20 border-transparent opacity-20']">
+                   day.isCurrentMonth ? 'bg-zinc-900 border-zinc-800' : 'bg-black/20 border-transparent opacity-10']">
           <span class="text-[10px] font-bold text-gray-400">{{ day.dateNumber }}</span>
-          <div v-if="day.totalPnl !== 0" class="text-right">
-            <span :class="['text-[11px] md:text-xs font-mono font-bold block', day.totalPnl > 0 ? 'text-green-400' : 'text-red-400']">
+          
+          <!-- 只在有效當月且有交易時顯示，絕無 NaN -->
+          <div v-if="day.isCurrentMonth && day.totalPnl !== 0" class="text-right font-mono">
+            <span :class="['text-[11px] md:text-xs font-bold block', day.totalPnl > 0 ? 'text-green-400' : 'text-red-400']">
               {{ day.totalPnl > 0 ? '+' : '' }}${{ Math.round(day.totalPnl) }}
             </span>
             <span v-if="day.optPnl !== 0" class="text-[9px] text-gray-400 block truncate">租: {{ day.optPnl > 0 ? '+' : '' }}${{ Math.round(day.optPnl) }}</span>
@@ -343,7 +345,7 @@
       </div>
     </section>
 
-    <!-- TAB 4: 視覺化圖表與數據分析看板 (Visual Analytics) -->
+    <!-- TAB 4: 視覺化圖表與數據分析看板 -->
     <section v-if="currentTab === 'analytics'" class="space-y-6">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="card p-4 rounded-2xl">
@@ -372,7 +374,9 @@
         </div>
       </div>
 
+      <!-- Charts Row -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Chart 1: Monthly Bar -->
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
             <i class="fa-solid fa-chart-column text-green-400"></i> 每月總損益分佈 (期權租金 vs 正股損益)
@@ -382,12 +386,13 @@
           </div>
         </div>
 
+        <!-- Chart 2: Cumulative Growth Line Chart (升級為資金累積增長曲線) -->
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-chart-pie text-blue-400"></i> 各標的淨利潤佔比 (By Ticker)
+            <i class="fa-solid fa-arrow-trend-up text-blue-400"></i> 累計淨資產增長曲線 (Cumulative P&L Curve)
           </h3>
-          <div class="relative h-56 flex items-center justify-center">
-            <canvas id="tickerChart"></canvas>
+          <div class="relative h-56">
+            <canvas id="growthChart"></canvas>
           </div>
         </div>
       </div>
@@ -475,7 +480,7 @@
       </div>
     </div>
 
-    <!-- 2. 正股底倉與賣出結算設定彈窗 (Stock Basis & Realized Modal) -->
+    <!-- 2. 正股底倉設定彈窗 -->
     <div v-if="editingStockTicker" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
       <div class="card w-full max-w-md p-6 rounded-2xl shadow-2xl border border-zinc-700">
         <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
@@ -486,7 +491,6 @@
         </div>
 
         <form @submit.prevent="saveStockBasis" class="space-y-4">
-          <!-- 是否已賣出切換 -->
           <div class="flex items-center justify-between p-3 bg-zinc-900 rounded-xl border border-zinc-800">
             <span class="text-xs font-bold text-gray-200">正股目前狀態</span>
             <div class="flex gap-2">
@@ -512,15 +516,13 @@
             </div>
           </div>
 
-          <!-- 持倉中視圖 -->
           <div v-if="!stockForm.isSold">
             <label class="block text-xs text-gray-400 mb-1">目前市場現價 (Market Price)</label>
             <input type="number" step="any" v-model.number="stockForm.mktPrice" placeholder="如 101.06" class="w-full p-2.5 text-sm rounded-lg font-bold text-green-400 font-mono" />
           </div>
 
-          <!-- 已賣出視圖 -->
           <div v-if="stockForm.isSold" class="p-3 bg-red-950/30 rounded-xl border border-red-900/50 space-y-3">
-            <span class="text-xs font-bold text-red-300 block">已平倉結算資料 (將記入日曆與分析)</span>
+            <span class="text-xs font-bold text-red-300 block">已平倉結算資料</span>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-[10px] text-gray-400 mb-1">賣出 / 被 Call 走日期</label>
@@ -688,33 +690,33 @@
           const end = t.isClosed ? new Date(t.closeDate || t.expiryDate) : new Date();
           const diffTime = end - start;
           const days = Math.round(diffTime / (1000 * 60 * 60 * 24));
-          return Math.max(1, days);
+          return Math.max(1, days || 1);
         };
 
         const calculatePnL = (t) => {
-          if (!t.isClosed) return 0;
-          const diff = (t.openPremium - (t.closePrice || 0));
-          return diff * t.contracts * 100;
+          if (!t || !t.isClosed) return 0;
+          const diff = (Number(t.openPremium) || 0) - (Number(t.closePrice) || 0);
+          return diff * (Number(t.contracts) || 1) * 100;
         };
 
         const getStockBasis = (ticker) => stockBases.value[ticker] || { isSold: false, cost: 0, shares: 100, mktPrice: 0, soldDate: '', soldPrice: 0 };
 
         const calculateStockRealizedPnL = (ticker) => {
           const basis = getStockBasis(ticker);
-          if (!basis.isSold || !basis.cost || !basis.soldPrice) return 0;
-          return (basis.soldPrice - basis.cost) * (basis.shares || 100);
+          if (!basis || !basis.isSold || !basis.cost || !basis.soldPrice) return 0;
+          return ((Number(basis.soldPrice) || 0) - (Number(basis.cost) || 0)) * (Number(basis.shares) || 100);
         };
 
         const calculateNetCost = (ticker, totalCollected) => {
           const basis = getStockBasis(ticker);
-          if (!basis.cost) return '--';
+          if (!basis || !basis.cost) return '--';
           const net = basis.cost - (totalCollected / (basis.shares || 100));
           return `$${net.toFixed(2)}`;
         };
 
         const calculateTotalStockPnL = (ticker, totalCollected) => {
           const basis = getStockBasis(ticker);
-          if (!basis.cost || !basis.mktPrice) return { pnl: 0, label: '--' };
+          if (!basis || !basis.cost || !basis.mktPrice) return { pnl: 0, label: '--' };
           const shares = basis.shares || 100;
           const netCost = basis.cost - (totalCollected / shares);
           const totalPnL = (basis.mktPrice - netCost) * shares;
@@ -858,14 +860,13 @@
           else if (calendarMonth.value > 11) { calendarMonth.value = 0; calendarYear.value++; }
         };
 
-        // 當月累計盈虧 (包含期權 + 正股已賣出)
         const currentMonthStats = computed(() => {
           const y = calendarYear.value, m = calendarMonth.value;
           const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
           let optTotal = 0;
           let stockTotal = 0;
 
-          trades.value.filter(t => t.isClosed).forEach(t => {
+          trades.value.filter(t => t && t.isClosed).forEach(t => {
             const dateKey = t.closeDate || t.expiryDate;
             if (dateKey && dateKey.startsWith(monthPrefix)) {
               optTotal += calculatePnL(t);
@@ -874,7 +875,7 @@
 
           Object.keys(stockBases.value).forEach(ticker => {
             const basis = stockBases.value[ticker];
-            if (basis.isSold && basis.soldDate && basis.soldDate.startsWith(monthPrefix)) {
+            if (basis && basis.isSold && basis.soldDate && basis.soldDate.startsWith(monthPrefix)) {
               stockTotal += calculateStockRealizedPnL(ticker);
             }
           });
@@ -882,6 +883,7 @@
           return { optTotal, stockTotal, total: optTotal + stockTotal };
         });
 
+        // 日曆數值安全填充
         const calendarDays = computed(() => {
           const y = calendarYear.value, m = calendarMonth.value;
           const firstDay = new Date(y, m, 1).getDay();
@@ -890,36 +892,40 @@
 
           const dayMap = {};
 
-          // 匯總期權
-          trades.value.filter(t => t.isClosed).forEach(t => {
+          trades.value.filter(t => t && t.isClosed).forEach(t => {
             const dateKey = t.closeDate || t.expiryDate;
-            if (!dayMap[dateKey]) dayMap[dateKey] = { optPnl: 0, stockPnl: 0 };
-            dayMap[dateKey].optPnl += calculatePnL(t);
-          });
-
-          // 匯總已賣出正股
-          Object.keys(stockBases.value).forEach(ticker => {
-            const basis = stockBases.value[ticker];
-            if (basis.isSold && basis.soldDate) {
-              const dateKey = basis.soldDate;
+            if (dateKey) {
               if (!dayMap[dateKey]) dayMap[dateKey] = { optPnl: 0, stockPnl: 0 };
-              dayMap[dateKey].stockPnl += calculateStockRealizedPnL(ticker);
+              dayMap[dateKey].optPnl += (calculatePnL(t) || 0);
             }
           });
 
-          for (let i = 0; i < firstDay; i++) days.push({ isCurrentMonth: false, dateNumber: '' });
+          Object.keys(stockBases.value).forEach(ticker => {
+            const basis = stockBases.value[ticker];
+            if (basis && basis.isSold && basis.soldDate) {
+              const dateKey = basis.soldDate;
+              if (!dayMap[dateKey]) dayMap[dateKey] = { optPnl: 0, stockPnl: 0 };
+              dayMap[dateKey].stockPnl += (calculateStockRealizedPnL(ticker) || 0);
+            }
+          });
+
+          for (let i = 0; i < firstDay; i++) {
+            days.push({ isCurrentMonth: false, dateNumber: '', optPnl: 0, stockPnl: 0, totalPnl: 0 });
+          }
+
           for (let d = 1; d <= totalDays; d++) {
             const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const info = dayMap[dateStr] || { optPnl: 0, stockPnl: 0 };
-            const totalPnl = info.optPnl + info.stockPnl;
-            days.push({ isCurrentMonth: true, dateNumber: d, optPnl: info.optPnl, stockPnl: info.stockPnl, totalPnl });
+            const optPnl = Number(info.optPnl) || 0;
+            const stockPnl = Number(info.stockPnl) || 0;
+            const totalPnl = optPnl + stockPnl;
+            days.push({ isCurrentMonth: true, dateNumber: d, optPnl, stockPnl, totalPnl });
           }
           return days;
         });
 
-        // 數據分析看板統計
         const stats = computed(() => {
-          const closed = trades.value.filter(t => t.isClosed);
+          const closed = trades.value.filter(t => t && t.isClosed);
           let totalOptPnl = 0;
           let totalAnnualizedSum = 0;
           let validAnnualizedCount = 0;
@@ -944,7 +950,7 @@
           let totalStockRealizedPnL = 0;
           Object.keys(stockBases.value).forEach(ticker => {
             const basis = stockBases.value[ticker];
-            if (basis.isSold) {
+            if (basis && basis.isSold) {
               const stockPnl = calculateStockRealizedPnL(ticker);
               totalStockRealizedPnL += stockPnl;
               if (!tickerStats[ticker]) tickerStats[ticker] = { ticker, optPnl: 0, stockPnl: 0, totalNetPnl: 0 };
@@ -967,25 +973,28 @@
         });
 
         let monthlyChartInst = null;
-        let tickerChartInst = null;
+        let growthChartInst = null;
 
         const renderCharts = () => {
           nextTick(() => {
             const monthlyCtx = document.getElementById('monthlyChart');
-            const tickerCtx = document.getElementById('tickerChart');
-            if (!monthlyCtx || !tickerCtx) return;
+            const growthCtx = document.getElementById('growthChart');
+            if (!monthlyCtx || !growthCtx) return;
 
+            // 1. 每月分佈
             const monthlyMap = {};
-            trades.value.filter(t => t.isClosed).forEach(t => {
+            trades.value.filter(t => t && t.isClosed).forEach(t => {
               const date = t.closeDate || t.expiryDate;
-              const m = date.slice(0, 7);
-              if (!monthlyMap[m]) monthlyMap[m] = { opt: 0, stock: 0 };
-              monthlyMap[m].opt += calculatePnL(t);
+              if (date) {
+                const m = date.slice(0, 7);
+                if (!monthlyMap[m]) monthlyMap[m] = { opt: 0, stock: 0 };
+                monthlyMap[m].opt += calculatePnL(t);
+              }
             });
 
             Object.keys(stockBases.value).forEach(ticker => {
               const basis = stockBases.value[ticker];
-              if (basis.isSold && basis.soldDate) {
+              if (basis && basis.isSold && basis.soldDate) {
                 const m = basis.soldDate.slice(0, 7);
                 if (!monthlyMap[m]) monthlyMap[m] = { opt: 0, stock: 0 };
                 monthlyMap[m].stock += calculateStockRealizedPnL(ticker);
@@ -1003,7 +1012,7 @@
                 labels: months,
                 datasets: [
                   { label: '期權租金', data: optValues, backgroundColor: '#22c55e', borderRadius: 4 },
-                  { label: '正股已實現', data: stockValues, backgroundColor: '#ef4444', borderRadius: 4 }
+                  { label: '正股損益', data: stockValues, backgroundColor: '#ef4444', borderRadius: 4 }
                 ]
               },
               options: {
@@ -1017,24 +1026,57 @@
               }
             });
 
-            const tickerLabels = stats.value.tickerRanking.map(i => i.ticker);
-            const tickerValues = stats.value.tickerRanking.map(i => i.totalNetPnl);
+            // 2. 累計淨資產成長曲線 (Cumulative Growth Line Chart)
+            const timelineEvents = [];
 
-            if (tickerChartInst) tickerChartInst.destroy();
-            tickerChartInst = new Chart(tickerCtx, {
-              type: 'doughnut',
+            trades.value.filter(t => t && t.isClosed).forEach(t => {
+              const d = t.closeDate || t.expiryDate;
+              if (d) timelineEvents.push({ date: d, pnl: calculatePnL(t) });
+            });
+
+            Object.keys(stockBases.value).forEach(ticker => {
+              const basis = stockBases.value[ticker];
+              if (basis && basis.isSold && basis.soldDate) {
+                timelineEvents.push({ date: basis.soldDate, pnl: calculateStockRealizedPnL(ticker) });
+              }
+            });
+
+            timelineEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            const growthLabels = [];
+            const growthValues = [];
+            let cumulative = 0;
+
+            timelineEvents.forEach(e => {
+              cumulative += e.pnl;
+              growthLabels.push(e.date.slice(5)); // MM-DD
+              growthValues.push(cumulative);
+            });
+
+            if (growthChartInst) growthChartInst.destroy();
+            growthChartInst = new Chart(growthCtx, {
+              type: 'line',
               data: {
-                labels: tickerLabels,
+                labels: growthLabels,
                 datasets: [{
-                  data: tickerValues,
-                  backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'],
-                  borderWidth: 0
+                  label: '累積總損益 ($)',
+                  data: growthValues,
+                  borderColor: '#38bdf8',
+                  backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                  fill: true,
+                  tension: 0.35,
+                  pointRadius: 4,
+                  pointBackgroundColor: '#38bdf8'
                 }]
               },
               options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom', labels: { color: '#d4d4d8', boxWidth: 12 } } }
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa' } },
+                  x: { grid: { display: false }, ticks: { color: '#a1a1aa' } }
+                }
               }
             });
           });
