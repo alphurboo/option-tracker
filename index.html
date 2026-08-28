@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Options Master Tracker | 期權收租與損益日誌</title>
-  <!-- Tailwind CSS & Vue 3 -->
+  <!-- Tailwind CSS & Vue 3 & Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <style>
@@ -27,7 +28,7 @@
         <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
           <i class="fa-solid fa-chart-pie text-green-500"></i> Option Master Tracker
         </h1>
-        <p class="text-xs text-gray-400">期權收租滾倉 · 損益日曆 · 統計分析</p>
+        <p class="text-xs text-gray-400">期權收租滾倉 · 保本價追蹤 · 損益日曆 · 視覺化分析</p>
       </div>
       <div class="flex gap-2">
         <button @click="exportData" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700">
@@ -42,7 +43,7 @@
 
     <!-- Navigation Tabs -->
     <nav class="flex bg-gray-900 p-1 rounded-xl mb-6 border border-gray-800 text-sm">
-      <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+      <button v-for="tab in tabs" :key="tab.id" @click="switchTab(tab.id)"
         :class="['flex-1 py-2 rounded-lg font-medium transition duration-150 flex items-center justify-center gap-2',
                  currentTab === tab.id ? 'bg-zinc-800 text-green-400 shadow' : 'text-gray-400 hover:text-gray-200']">
         <i :class="tab.icon"></i>
@@ -52,7 +53,6 @@
 
     <!-- TAB 1: 記賬錄入 (Input Form) -->
     <section v-if="currentTab === 'input'" class="card p-5 rounded-2xl shadow-xl">
-      <!-- 常用標的管理 -->
       <div class="mb-5 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800">
         <div class="flex justify-between items-center mb-2">
           <label class="text-xs font-semibold text-gray-400">常用標的 (點擊套用 / 點 × 刪除)</label>
@@ -100,8 +100,8 @@
         <div>
           <label class="block text-xs text-gray-400 mb-1">操作類型</label>
           <select v-model="form.strategy" class="w-full p-2.5 rounded-lg text-sm font-semibold">
-            <option value="Sell Put">出租收租 (Sell Put / Cash-Secured Put)</option>
             <option value="Covered Call">備兌收租 (Covered Call / Sell Call)</option>
+            <option value="Sell Put">出租收租 (Sell Put / Cash-Secured Put)</option>
             <option value="Buy LEAPs Call">買入遠期 (Buy LEAPs Call)</option>
           </select>
         </div>
@@ -150,36 +150,65 @@
       </form>
     </section>
 
-    <!-- TAB 2: 持倉與滾倉鏈 (Ledger View) -->
+    <!-- TAB 2: 持倉總帳與正股底倉 (Ledger & Net Cost) -->
     <section v-if="currentTab === 'ledger'" class="space-y-6">
       <div v-if="Object.keys(groupedTrades).length === 0" class="card p-8 rounded-2xl text-center text-gray-500">
         暫無交易記錄，請先在「記賬錄入」新增期權操作。
       </div>
 
       <div v-for="(group, ticker) in groupedTrades" :key="ticker" class="card rounded-2xl overflow-hidden border border-zinc-800 shadow-xl">
-        <!-- Ticker Header -->
-        <div class="bg-zinc-800/80 px-4 py-3 flex justify-between items-center border-b border-zinc-700">
-          <div class="flex items-center gap-2">
-            <span class="text-base font-extrabold text-white tracking-wider">{{ ticker }}</span>
-            <span class="text-xs bg-zinc-700 px-2 py-0.5 rounded text-gray-300">{{ group.trades.length }} 筆合約</span>
+        <!-- Stock Basis Dashboard (Excel Logic) -->
+        <div class="bg-gradient-to-r from-zinc-900 to-zinc-800 p-4 border-b border-zinc-700">
+          <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-xl font-black text-white tracking-wider">{{ ticker }}</span>
+              <span class="text-xs bg-zinc-700 px-2 py-0.5 rounded text-gray-300 font-mono">{{ group.trades.length }} 筆期權鏈</span>
+            </div>
+            <button @click="openStockBasisModal(ticker)" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+              <i class="fa-solid fa-sliders"></i> 設定正股底倉與現價
+            </button>
           </div>
-          <div class="text-right">
-            <span class="text-xs text-gray-400 block">累計已收租金</span>
-            <span class="text-sm font-bold text-green-400">+${{ group.totalCollected.toFixed(2) }}</span>
+
+          <!-- Net Cost Summary Row -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
+            <div class="bg-black/30 p-2.5 rounded-xl">
+              <span class="text-[10px] text-gray-400 block font-sans">正股買入成本</span>
+              <span class="text-sm font-bold text-gray-200">
+                {{ getStockBasis(ticker).cost ? '$' + getStockBasis(ticker).cost : '--' }}
+              </span>
+            </div>
+            <div class="bg-black/30 p-2.5 rounded-xl">
+              <span class="text-[10px] text-gray-400 block font-sans">累計收租扣減</span>
+              <span class="text-sm font-bold text-green-400">
+                +${{ (group.totalCollected / (getStockBasis(ticker).shares || 100)).toFixed(2) }}/股
+              </span>
+            </div>
+            <div class="bg-black/30 p-2.5 rounded-xl border border-green-500/30">
+              <span class="text-[10px] text-green-400 block font-sans font-bold">真實保本價 (Net Cost)</span>
+              <span class="text-sm font-extrabold text-green-300">
+                {{ calculateNetCost(ticker, group.totalCollected) }}
+              </span>
+            </div>
+            <div class="bg-black/30 p-2.5 rounded-xl">
+              <span class="text-[10px] text-gray-400 block font-sans">正股現價 / 總盈虧</span>
+              <span class="text-sm font-bold" :class="calculateTotalStockPnL(ticker, group.totalCollected).pnl >= 0 ? 'text-green-400' : 'text-red-400'">
+                {{ calculateTotalStockPnL(ticker, group.totalCollected).label }}
+              </span>
+            </div>
           </div>
         </div>
 
-        <!-- Ledger Table -->
+        <!-- Options Ledger Table -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
-            <thead class="bg-zinc-900/50 text-gray-400 border-b border-zinc-800">
+            <thead class="bg-zinc-900/80 text-gray-400 border-b border-zinc-800">
               <tr>
                 <th class="p-3">開倉 / 到期</th>
-                <th class="p-3">操作詳情</th>
+                <th class="p-3">合約內容</th>
                 <th class="p-3 text-center">持倉天數</th>
                 <th class="p-3 text-right">開倉租金</th>
                 <th class="p-3 text-right">結算 / 滾倉</th>
-                <th class="p-3 text-right">淨利潤 (P&L)</th>
+                <th class="p-3 text-right">實收利潤 (P&L)</th>
                 <th class="p-3 text-center">操作</th>
               </tr>
             </thead>
@@ -190,7 +219,7 @@
                   <div class="text-[10px] text-gray-500">Exp: {{ t.expiryDate.slice(5) }}</div>
                 </td>
                 <td class="p-3">
-                  <span :class="['px-1.5 py-0.5 rounded text-[10px] font-semibold mr-1',
+                  <span :class="['px-1.5 py-0.5 rounded text-[10px] font-semibold mr-1 font-sans',
                                t.strategy.includes('Put') ? 'bg-blue-900/60 text-blue-300' : 'bg-amber-900/60 text-amber-300']">
                     {{ t.strategy }}
                   </span>
@@ -198,7 +227,7 @@
                   <span class="text-gray-400 text-[10px] ml-1">({{ t.contracts }}張)</span>
                 </td>
                 <td class="p-3 text-center">
-                  <span class="bg-zinc-800 px-2 py-0.5 rounded text-gray-300 font-bold">
+                  <span class="bg-zinc-800 px-2 py-0.5 rounded text-gray-300 font-bold text-[11px]">
                     {{ getHoldingDays(t) }} 天
                   </span>
                 </td>
@@ -207,17 +236,23 @@
                   <span v-if="t.isClosed" class="text-gray-400">
                     {{ t.openPremium }} &rarr; <span class="text-yellow-400 font-bold">{{ t.closePrice }}</span>
                   </span>
-                  <span v-else class="text-green-500 font-sans text-[10px]">持倉中</span>
+                  <span v-else class="text-green-400 font-sans font-bold text-[11px]">🟢 持倉中</span>
                 </td>
                 <td class="p-3 text-right font-bold" :class="calculatePnL(t) >= 0 ? 'text-green-400' : 'text-red-400'">
                   {{ calculatePnL(t) >= 0 ? '+' : '' }}${{ calculatePnL(t).toFixed(2) }}
                 </td>
                 <td class="p-3 text-center">
-                  <div class="flex justify-center gap-2">
-                    <button @click="openEditModal(t)" class="text-gray-400 hover:text-green-400 p-1" title="編輯">
+                  <div class="flex justify-center items-center gap-1.5">
+                    <!-- 一鍵滾倉按鈕 -->
+                    <button v-if="!t.isClosed" @click="openRollModal(t)" class="px-2 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded text-[11px] font-sans font-bold flex items-center gap-1">
+                      <i class="fa-solid fa-arrows-rotate"></i> 滾倉
+                    </button>
+                    <!-- 編輯按鈕 -->
+                    <button @click="openEditModal(t)" class="text-gray-400 hover:text-green-400 p-1.5" title="編輯">
                       <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 p-1" title="刪除">
+                    <!-- 刪除按鈕 -->
+                    <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 p-1.5" title="刪除">
                       <i class="fa-solid fa-trash-can"></i>
                     </button>
                   </div>
@@ -257,8 +292,9 @@
       </div>
     </section>
 
-    <!-- TAB 4: 數據分析看板 (Analytics Dashboard) -->
-    <section v-if="currentTab === 'analytics'" class="space-y-4">
+    <!-- TAB 4: 視覺化圖表與數據分析看板 (Visual Analytics) -->
+    <section v-if="currentTab === 'analytics'" class="space-y-6">
+      <!-- 4 Top KPI Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="card p-4 rounded-2xl">
           <span class="text-[11px] text-gray-400 flex items-center gap-1">純收租勝率 <i class="fa-regular fa-circle-question"></i></span>
@@ -271,14 +307,37 @@
           <span class="text-[10px] text-gray-500">被指派 / 接正股</span>
         </div>
         <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">平均年化報酬 <i class="fa-regular fa-circle-question" title="(淨收益 / 保證金) * (365 / 持倉日數)"></i></span>
+          <span class="text-[11px] text-gray-400 flex items-center gap-1">平均年化報酬 (ROC)</span>
           <div class="text-2xl font-extrabold text-green-400 mt-1 font-mono">{{ stats.annualizedReturn }}%</div>
-          <span class="text-[10px] text-gray-500">加權平均年化 (ROC)</span>
+          <span class="text-[10px] text-gray-500">加權平均年化</span>
         </div>
         <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">已結算筆數 <i class="fa-regular fa-circle-question"></i></span>
+          <span class="text-[11px] text-gray-400 flex items-center gap-1">已結算筆數</span>
           <div class="text-2xl font-extrabold text-white mt-1 font-mono">{{ stats.settledCount }}</div>
           <span class="text-[10px] text-gray-500">換約滾算 1 筆</span>
+        </div>
+      </div>
+
+      <!-- Charts Row (Chart.js) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Chart 1: Monthly Cashflow -->
+        <div class="card p-4 rounded-2xl">
+          <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-chart-column text-green-400"></i> 每月被動現金流 (Monthly Cashflow)
+          </h3>
+          <div class="relative h-56">
+            <canvas id="monthlyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: Profit by Ticker -->
+        <div class="card p-4 rounded-2xl">
+          <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-blue-400"></i> 各標的累計收益分佈 (By Ticker)
+          </h3>
+          <div class="relative h-56 flex items-center justify-center">
+            <canvas id="tickerChart"></canvas>
+          </div>
         </div>
       </div>
 
@@ -303,27 +362,103 @@
           </div>
         </div>
       </div>
-
-      <!-- Efficiency Cards -->
-      <div class="card p-5 rounded-2xl">
-        <h3 class="text-sm font-bold text-gray-300 mb-3 flex items-center gap-2">
-          <i class="fa-solid fa-scissors text-blue-400"></i> 獲利了結效率 (單筆提前買回)
-        </h3>
-        <div class="grid grid-cols-2 gap-4 pt-2">
-          <div class="card-inner p-3 rounded-xl">
-            <div class="text-xl font-black text-green-400 font-mono">{{ stats.capturedRentRatio }}%</div>
-            <div class="text-[10px] text-gray-400">整體抓到的租金比例</div>
-          </div>
-          <div class="card-inner p-3 rounded-xl">
-            <div class="text-xl font-black text-white font-mono">{{ stats.avgHoldingDays }} <span class="text-xs font-normal">天</span></div>
-            <div class="text-[10px] text-gray-400">平均持有天數</div>
-          </div>
-        </div>
-      </div>
     </section>
 
-    <!-- 編輯彈窗 (Edit Modal) -->
-    <div v-if="editingTrade" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+    <!-- 1. 滾倉彈窗 (Roll Forward Modal) -->
+    <div v-if="rollingTrade" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
+      <div class="card w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-zinc-700">
+        <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-arrows-rotate text-green-400"></i> 一鍵滾倉 ({{ rollingTrade.ticker }})
+          </h3>
+          <button @click="rollingTrade = null" class="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+
+        <form @submit.prevent="submitRoll" class="space-y-4">
+          <!-- Step 1: Close current -->
+          <div class="p-3 bg-zinc-900 rounded-xl border border-zinc-800">
+            <span class="text-xs font-bold text-yellow-400 block mb-2">步驟 1: 平倉當前合約</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">平倉日期</label>
+                <input type="date" v-model="rollForm.closeDate" required class="w-full p-2 text-xs rounded-lg font-mono" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">買回價格 (Close Price)</label>
+                <input type="number" step="any" v-model.number="rollForm.closePrice" required placeholder="如 2.75" class="w-full p-2 text-xs rounded-lg font-bold text-yellow-400 font-mono" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Open new -->
+          <div class="p-3 bg-zinc-900 rounded-xl border border-zinc-800 space-y-3">
+            <span class="text-xs font-bold text-green-400 block">步驟 2: 開立新一期滾倉合約</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">新合約到期日</label>
+                <input type="date" v-model="rollForm.newExpiryDate" required class="w-full p-2 text-xs rounded-lg font-mono" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">新行使價 (Strike)</label>
+                <input type="number" step="any" v-model.number="rollForm.newStrike" required placeholder="如 480" class="w-full p-2 text-xs rounded-lg font-bold font-mono" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-1">新合約收取租金 (New Premium)</label>
+              <input type="number" step="any" v-model.number="rollForm.newPremium" required placeholder="如 6.1" class="w-full p-2 text-xs rounded-lg font-bold text-green-400 font-mono" />
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="button" @click="rollingTrade = null" class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-gray-300 rounded-xl text-xs font-bold">
+              取消
+            </button>
+            <button type="submit" class="flex-1 py-2.5 btn-green rounded-xl text-xs font-bold">
+              確認完成滾倉
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 2. 正股底倉設定彈窗 (Stock Basis Modal) -->
+    <div v-if="editingStockTicker" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
+      <div class="card w-full max-w-md p-6 rounded-2xl shadow-2xl border border-zinc-700">
+        <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-blue-400"></i> 設定 {{ editingStockTicker }} 正股底倉
+          </h3>
+          <button @click="editingStockTicker = null" class="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+
+        <form @submit.prevent="saveStockBasis" class="space-y-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">正股買入成本價 (每股 Cost)</label>
+            <input type="number" step="any" v-model.number="stockForm.cost" placeholder="如 413.36" class="w-full p-2.5 text-sm rounded-lg font-bold" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">持有股數 (Shares)</label>
+            <input type="number" v-model.number="stockForm.shares" placeholder="預設 100" class="w-full p-2.5 text-sm rounded-lg font-bold" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">目前正股市場現價 (Market Value)</label>
+            <input type="number" step="any" v-model.number="stockForm.mktPrice" placeholder="如 429.00" class="w-full p-2.5 text-sm rounded-lg font-bold text-green-400" />
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="button" @click="editingStockTicker = null" class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-gray-300 rounded-xl text-xs font-bold">
+              取消
+            </button>
+            <button type="submit" class="flex-1 py-2.5 btn-green rounded-xl text-xs font-bold">
+              儲存底倉設定
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 3. 一般編輯彈窗 (Edit Modal) -->
+    <div v-if="editingTrade" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
       <div class="card w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-zinc-700 max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -363,8 +498,8 @@
             <div>
               <label class="block text-xs text-gray-400 mb-1">操作類型</label>
               <select v-model="editingTrade.strategy" class="w-full p-2 text-xs rounded-lg">
-                <option value="Sell Put">Sell Put</option>
                 <option value="Covered Call">Covered Call</option>
+                <option value="Sell Put">Sell Put</option>
                 <option value="Buy LEAPs Call">Buy LEAPs Call</option>
               </select>
             </div>
@@ -415,7 +550,7 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted } = Vue;
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     createApp({
       setup() {
@@ -424,14 +559,16 @@
           { id: 'input', name: '記賬錄入', icon: 'fa-solid fa-pen-to-square' },
           { id: 'ledger', name: '持倉總帳', icon: 'fa-solid fa-list-check' },
           { id: 'calendar', name: '損益日曆', icon: 'fa-solid fa-calendar-days' },
-          { id: 'analytics', name: '數據分析', icon: 'fa-solid fa-chart-simple' }
+          { id: 'analytics', name: '視覺分析', icon: 'fa-solid fa-chart-simple' }
         ];
 
         const commonTickers = ref(['NFLX', 'NVDA', 'TSM', 'INTC', 'GOOG', 'EXE']);
         const trades = ref([]);
-        const editingTrade = ref(null);
+        const stockBases = ref({}); // { TSM: { cost: 413.36, shares: 100, mktPrice: 429 } }
 
         const getToday = () => new Date().toISOString().split('T')[0];
+
+        // 表單狀態
         const form = ref({
           openDate: getToday(),
           expiryDate: getToday(),
@@ -446,24 +583,22 @@
           status: 'closed'
         });
 
-        // 常用標的管理
-        const promptAddTicker = () => {
-          const t = prompt('請輸入股票代碼 (如 NVDA, QQQ):');
-          if (t) {
-            const clean = t.trim().toUpperCase();
-            if (clean && !commonTickers.value.includes(clean)) {
-              commonTickers.value.push(clean);
-              saveTickers();
-            }
-          }
-        };
+        // 滾倉相關
+        const rollingTrade = ref(null);
+        const rollForm = ref({
+          closeDate: getToday(),
+          closePrice: null,
+          newExpiryDate: getToday(),
+          newStrike: null,
+          newPremium: null
+        });
 
-        const removeTicker = (t) => {
-          commonTickers.value = commonTickers.value.filter(item => item !== t);
-          saveTickers();
-        };
+        // 正股底倉相關
+        const editingStockTicker = ref(null);
+        const stockForm = ref({ cost: null, shares: 100, mktPrice: null });
 
-        const saveTickers = () => localStorage.setItem('opt_tickers', JSON.stringify(commonTickers.value));
+        // 一般編輯
+        const editingTrade = ref(null);
 
         // 持倉日數計算
         const getHoldingDays = (t) => {
@@ -481,26 +616,137 @@
           return diff * t.contracts * 100;
         };
 
-        // 本地存儲
+        // 正股底倉讀取與計算
+        const getStockBasis = (ticker) => stockBases.value[ticker] || { cost: 0, shares: 100, mktPrice: 0 };
+
+        const calculateNetCost = (ticker, totalCollected) => {
+          const basis = getStockBasis(ticker);
+          if (!basis.cost) return '--';
+          const net = basis.cost - (totalCollected / (basis.shares || 100));
+          return `$${net.toFixed(2)}`;
+        };
+
+        const calculateTotalStockPnL = (ticker, totalCollected) => {
+          const basis = getStockBasis(ticker);
+          if (!basis.cost || !basis.mktPrice) return { pnl: 0, label: '--' };
+          const shares = basis.shares || 100;
+          const netCost = basis.cost - (totalCollected / shares);
+          const totalPnL = (basis.mktPrice - netCost) * shares;
+          return {
+            pnl: totalPnL,
+            label: `${totalPnL >= 0 ? '+' : ''}$${totalPnL.toFixed(0)} (現價 $${basis.mktPrice})`
+          };
+        };
+
+        // 開啟正股底倉彈窗
+        const openStockBasisModal = (ticker) => {
+          editingStockTicker.value = ticker;
+          const existing = getStockBasis(ticker);
+          stockForm.value = { cost: existing.cost || null, shares: existing.shares || 100, mktPrice: existing.mktPrice || null };
+        };
+
+        const saveStockBasis = () => {
+          if (editingStockTicker.value) {
+            stockBases.value[editingStockTicker.value] = { ...stockForm.value };
+            localStorage.setItem('opt_stock_bases', JSON.stringify(stockBases.value));
+            editingStockTicker.value = null;
+          }
+        };
+
+        // 一鍵滾倉邏輯
+        const openRollModal = (t) => {
+          rollingTrade.value = t;
+          rollForm.value = {
+            closeDate: getToday(),
+            closePrice: null,
+            newExpiryDate: getToday(),
+            newStrike: t.strike,
+            newPremium: null
+          };
+        };
+
+        const submitRoll = () => {
+          if (!rollingTrade.value) return;
+          const old = rollingTrade.value;
+
+          // 1. 平掉舊合約
+          old.isClosed = true;
+          old.closeDate = rollForm.value.closeDate;
+          old.closePrice = Number(rollForm.value.closePrice);
+          old.status = 'closed';
+
+          // 2. 開立新合約
+          const newTrade = {
+            id: Date.now(),
+            ticker: old.ticker,
+            strategy: old.strategy,
+            contracts: old.contracts,
+            openDate: rollForm.value.closeDate,
+            expiryDate: rollForm.value.newExpiryDate,
+            strike: Number(rollForm.value.newStrike),
+            openPremium: Number(rollForm.value.newPremium),
+            isClosed: false,
+            closeDate: null,
+            closePrice: null,
+            status: 'closed'
+          };
+
+          trades.value.unshift(newTrade);
+          persist();
+          rollingTrade.value = null;
+          alert('滾倉成功！舊合約已結算，新合約已加入總帳。');
+        };
+
+        // LocalStorage & 預設載入
         onMounted(() => {
           const savedTickers = localStorage.getItem('opt_tickers');
           if (savedTickers) commonTickers.value = JSON.parse(savedTickers);
 
+          const savedBases = localStorage.getItem('opt_stock_bases');
+          if (savedBases) stockBases.value = JSON.parse(savedBases);
+          else {
+            // 預設載入你 Excel 中的底倉數值
+            stockBases.value = {
+              TSM: { cost: 413.36, shares: 100, mktPrice: 429 },
+              GOOG: { cost: 369.08, shares: 100, mktPrice: 355 }
+            };
+            localStorage.setItem('opt_stock_bases', JSON.stringify(stockBases.value));
+          }
+
           const savedTrades = localStorage.getItem('opt_trades');
           if (savedTrades) trades.value = JSON.parse(savedTrades);
           else {
+            // 預設載入你 Excel 中的滾倉記錄
             trades.value = [
               { id: 1, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-07-21', expiryDate: '2026-08-21', strike: 480, contracts: 1, openPremium: 6.6, isClosed: true, closeDate: '2026-08-04', closePrice: 3.1, status: 'closed' },
               { id: 2, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-08-04', expiryDate: '2026-08-28', strike: 465, contracts: 1, openPremium: 5.5, isClosed: true, closeDate: '2026-08-12', closePrice: 2.75, status: 'closed' },
               { id: 3, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-08-12', expiryDate: '2026-09-18', strike: 480, contracts: 1, openPremium: 6.1, isClosed: true, closeDate: '2026-08-20', closePrice: 2.0, status: 'closed' },
               { id: 4, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-06-09', expiryDate: '2026-07-10', strike: 400, contracts: 1, openPremium: 3.8, isClosed: true, closeDate: '2026-06-15', closePrice: 2.45, status: 'closed' },
-              { id: 5, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-06-15', expiryDate: '2026-07-17', strike: 400, contracts: 1, openPremium: 3.65, isClosed: true, closeDate: '2026-07-06', closePrice: 2.55, status: 'closed' }
+              { id: 5, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-06-15', expiryDate: '2026-07-17', strike: 400, contracts: 1, openPremium: 3.65, isClosed: true, closeDate: '2026-07-06', closePrice: 2.55, status: 'closed' },
+              { id: 6, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-07-06', expiryDate: '2026-07-31', strike: 400, contracts: 1, openPremium: 3.8, isClosed: true, closeDate: '2026-08-03', closePrice: 2.0, status: 'closed' },
+              { id: 7, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-08-03', expiryDate: '2026-09-18', strike: 420, contracts: 1, openPremium: 4.5, isClosed: true, closeDate: '2026-08-20', closePrice: 2.25, status: 'closed' }
             ];
             persist();
           }
         });
 
         const persist = () => localStorage.setItem('opt_trades', JSON.stringify(trades.value));
+
+        const promptAddTicker = () => {
+          const t = prompt('請輸入股票代碼 (如 NVDA, QQQ):');
+          if (t) {
+            const clean = t.trim().toUpperCase();
+            if (clean && !commonTickers.value.includes(clean)) {
+              commonTickers.value.push(clean);
+              localStorage.setItem('opt_tickers', JSON.stringify(commonTickers.value));
+            }
+          }
+        };
+
+        const removeTicker = (t) => {
+          commonTickers.value = commonTickers.value.filter(item => item !== t);
+          localStorage.setItem('opt_tickers', JSON.stringify(commonTickers.value));
+        };
 
         const saveRecord = () => {
           trades.value.unshift({ id: Date.now(), ...form.value, ticker: form.value.ticker.toUpperCase() });
@@ -516,11 +762,7 @@
           }
         };
 
-        // 編輯彈窗邏輯
-        const openEditModal = (t) => {
-          editingTrade.value = JSON.parse(JSON.stringify(t));
-        };
-
+        const openEditModal = (t) => { editingTrade.value = JSON.parse(JSON.stringify(t)); };
         const saveEdit = () => {
           const idx = trades.value.findIndex(t => t.id === editingTrade.value.id);
           if (idx !== -1) {
@@ -543,7 +785,7 @@
 
         // 日曆邏輯
         const calendarYear = ref(2026);
-        const calendarMonth = ref(7); // 8月 (0-indexed)
+        const calendarMonth = ref(7);
         const changeMonth = (delta) => {
           calendarMonth.value += delta;
           if (calendarMonth.value < 0) { calendarMonth.value = 11; calendarYear.value--; }
@@ -573,15 +815,13 @@
           return days;
         });
 
-        // 統計分析與嚴謹年化收益率計算
+        // 統計分析
         const stats = computed(() => {
           const closed = trades.value.filter(t => t.isClosed);
           const settledCount = closed.length;
-          if (settledCount === 0) return { winRate: '0.0', assignedRate: '0.0', annualizedReturn: '0.0', settledCount: 0, tickerRanking: [], capturedRentRatio: '0.0', avgHoldingDays: 0 };
+          if (settledCount === 0) return { winRate: '0.0', assignedRate: '0.0', annualizedReturn: '0.0', settledCount: 0, tickerRanking: [] };
 
-          let wins = 0, assigned = 0, totalRentCaptured = 0, totalDays = 0;
-          let totalAnnualizedSum = 0;
-          let validAnnualizedCount = 0;
+          let wins = 0, assigned = 0, totalAnnualizedSum = 0, validAnnualizedCount = 0;
           const tickerStats = {};
 
           closed.forEach(t => {
@@ -589,18 +829,11 @@
             if (pnl >= 0) wins++;
             if (t.status === 'assigned') assigned++;
 
-            const capturedRatio = t.openPremium > 0 ? ((t.openPremium - (t.closePrice || 0)) / t.openPremium) : 0;
-            totalRentCaptured += Math.max(0, capturedRatio);
-
             const days = getHoldingDays(t);
-            totalDays += days;
-
-            // 嚴謹年化收益率 (ROC): (PnL / (Strike * 100 * Contracts)) * (365 / days)
             const capitalAtRisk = (t.strike || 100) * 100 * (t.contracts || 1);
             if (capitalAtRisk > 0 && days > 0) {
               const tradeReturn = pnl / capitalAtRisk;
-              const annualized = tradeReturn * (365 / days) * 100;
-              totalAnnualizedSum += annualized;
+              totalAnnualizedSum += tradeReturn * (365 / days) * 100;
               validAnnualizedCount++;
             }
 
@@ -615,22 +848,93 @@
             assignedRate: ((item.assigned / item.count) * 100).toFixed(1)
           })).sort((a, b) => b.totalPnl - a.totalPnl);
 
-          const avgAnnualized = validAnnualizedCount > 0 ? (totalAnnualizedSum / validAnnualizedCount).toFixed(1) : '0.0';
-
           return {
             winRate: ((wins / settledCount) * 100).toFixed(1),
             assignedRate: ((assigned / settledCount) * 100).toFixed(1),
-            annualizedReturn: avgAnnualized,
+            annualizedReturn: validAnnualizedCount > 0 ? (totalAnnualizedSum / validAnnualizedCount).toFixed(1) : '0.0',
             settledCount,
-            tickerRanking: ranking,
-            capturedRentRatio: ((totalRentCaptured / settledCount) * 100).toFixed(1),
-            avgHoldingDays: Math.round(totalDays / settledCount)
+            tickerRanking: ranking
           };
         });
 
+        // 圖表渲染 (Chart.js)
+        let monthlyChartInst = null;
+        let tickerChartInst = null;
+
+        const renderCharts = () => {
+          nextTick(() => {
+            const monthlyCtx = document.getElementById('monthlyChart');
+            const tickerCtx = document.getElementById('tickerChart');
+            if (!monthlyCtx || !tickerCtx) return;
+
+            // 1. 每月現金流匯總
+            const monthlyMap = {};
+            trades.value.filter(t => t.isClosed).forEach(t => {
+              const date = t.closeDate || t.expiryDate;
+              const monthKey = date.slice(0, 7); // YYYY-MM
+              monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + calculatePnL(t);
+            });
+
+            const months = Object.keys(monthlyMap).sort();
+            const monthlyValues = months.map(m => monthlyMap[m]);
+
+            if (monthlyChartInst) monthlyChartInst.destroy();
+            monthlyChartInst = new Chart(monthlyCtx, {
+              type: 'bar',
+              data: {
+                labels: months,
+                datasets: [{
+                  label: '實收租金 ($)',
+                  data: monthlyValues,
+                  backgroundColor: '#22c55e',
+                  borderRadius: 6
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa' } },
+                  x: { grid: { display: false }, ticks: { color: '#a1a1aa' } }
+                }
+              }
+            });
+
+            // 2. 標的分佈圓餅圖
+            const tickerLabels = stats.value.tickerRanking.map(i => i.ticker);
+            const tickerValues = stats.value.tickerRanking.map(i => i.totalPnl);
+
+            if (tickerChartInst) tickerChartInst.destroy();
+            tickerChartInst = new Chart(tickerCtx, {
+              type: 'doughnut',
+              data: {
+                labels: tickerLabels,
+                datasets: [{
+                  data: tickerValues,
+                  backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'],
+                  borderWidth: 0
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: 'bottom', labels: { color: '#d4d4d8', boxWidth: 12 } }
+                }
+              }
+            });
+          });
+        };
+
+        const switchTab = (tabId) => {
+          currentTab.value = tabId;
+          if (tabId === 'analytics') renderCharts();
+        };
+
         // 備份與匯入
         const exportData = () => {
-          const payload = { trades: trades.value, tickers: commonTickers.value };
+          const payload = { trades: trades.value, tickers: commonTickers.value, stockBases: stockBases.value };
           const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -646,14 +950,14 @@
           reader.onload = (event) => {
             try {
               const parsed = JSON.parse(event.target.result);
-              if (Array.isArray(parsed)) {
-                trades.value = parsed;
-              } else if (parsed.trades) {
+              if (parsed.trades) {
                 trades.value = parsed.trades;
                 if (parsed.tickers) commonTickers.value = parsed.tickers;
+                if (parsed.stockBases) stockBases.value = parsed.stockBases;
+              } else if (Array.isArray(parsed)) {
+                trades.value = parsed;
               }
               persist();
-              saveTickers();
               alert('匯入成功！');
             } catch (err) {
               alert('檔案格式錯誤');
@@ -663,10 +967,13 @@
         };
 
         return {
-          currentTab, tabs, commonTickers, promptAddTicker, removeTicker, form, saveRecord, deleteTrade,
+          currentTab, tabs, switchTab, commonTickers, promptAddTicker, removeTicker, form, saveRecord, deleteTrade,
           editingTrade, openEditModal, saveEdit, getHoldingDays,
           groupedTrades, calculatePnL, calendarYear, calendarMonth, changeMonth, calendarDays,
-          stats, exportData, importData
+          stats, exportData, importData,
+          rollingTrade, rollForm, openRollModal, submitRoll,
+          editingStockTicker, stockForm, openStockBasisModal, saveStockBasis,
+          getStockBasis, calculateNetCost, calculateTotalStockPnL
         };
       }
     }).mount('#app');
