@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Options Master Tracker | 期權收租與損益日誌</title>
+  <title>Options Master Tracker | 期權收租與 Wheel 輪次總帳</title>
   <!-- Tailwind CSS & Vue 3 & Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -26,9 +26,9 @@
     <header class="flex justify-between items-center mb-6 pb-3 border-b border-gray-800">
       <div>
         <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          <i class="fa-solid fa-chart-pie text-green-500"></i> Option Master Tracker
+          <i class="fa-solid fa-arrows-spin text-green-500"></i> Wheel & Options Master
         </h1>
-        <p class="text-xs text-gray-400">期權收租滾倉 · 保本價追蹤 · 損益日曆 · 視覺化分析</p>
+        <p class="text-xs text-gray-400">期權收租 · 正股已實現盈虧 · 輪次保本價追蹤 · 損益日曆</p>
       </div>
       <div class="flex gap-2">
         <button @click="exportData" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700">
@@ -138,7 +138,7 @@
               <select v-model="form.status" class="w-full p-1.5 text-xs rounded">
                 <option value="closed">提前獲利了結</option>
                 <option value="expired">自然到期 ($0)</option>
-                <option value="assigned">被行使 / 接貨</option>
+                <option value="assigned">被行使 / 被Call走</option>
               </select>
             </div>
           </div>
@@ -158,18 +158,56 @@
       </div>
 
       <div v-for="(group, ticker) in groupedTrades" :key="ticker" class="card rounded-2xl overflow-hidden border border-zinc-800 shadow-xl">
+        <!-- Stock Basis Dashboard -->
         <div class="bg-gradient-to-r from-zinc-900 to-zinc-800 p-4 border-b border-zinc-700">
           <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
             <div class="flex items-center gap-2">
               <span class="text-xl font-black text-white tracking-wider">{{ ticker }}</span>
+              <span v-if="getStockBasis(ticker).isSold" class="text-xs bg-red-900/60 border border-red-500/40 text-red-300 px-2 py-0.5 rounded font-bold">
+                🔴 正股已平倉 / 已 Call 走
+              </span>
+              <span v-else class="text-xs bg-green-900/60 border border-green-500/40 text-green-300 px-2 py-0.5 rounded font-bold">
+                🟢 正股持倉中
+              </span>
               <span class="text-xs bg-zinc-700 px-2 py-0.5 rounded text-gray-300 font-mono">{{ group.trades.length }} 筆期權鏈</span>
             </div>
-            <button @click="openStockBasisModal(ticker)" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-              <i class="fa-solid fa-sliders"></i> 設定正股底倉與現價
-            </button>
+            <div class="flex gap-2">
+              <button @click="openStockBasisModal(ticker)" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-700">
+                <i class="fa-solid fa-sliders"></i> 設定正股成本 / 賣出結算
+              </button>
+            </div>
           </div>
 
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
+          <!-- 模式 1: 正股已賣出 (結算損益視圖) -->
+          <div v-if="getStockBasis(ticker).isSold" class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
+            <div class="bg-black/30 p-2.5 rounded-xl">
+              <span class="text-[10px] text-gray-400 block font-sans">買入 ➔ 賣出價</span>
+              <span class="text-xs font-bold text-gray-200">
+                ${{ getStockBasis(ticker).cost }} ➔ <span class="text-yellow-400">${{ getStockBasis(ticker).soldPrice }}</span>
+              </span>
+            </div>
+            <div class="bg-black/30 p-2.5 rounded-xl">
+              <span class="text-[10px] text-gray-400 block font-sans">正股已實現損益</span>
+              <span class="text-sm font-bold" :class="calculateStockRealizedPnL(ticker) >= 0 ? 'text-green-400' : 'text-red-400'">
+                {{ calculateStockRealizedPnL(ticker) >= 0 ? '+' : '' }}${{ calculateStockRealizedPnL(ticker).toFixed(0) }}
+              </span>
+            </div>
+            <div class="bg-black/30 p-2.5 rounded-xl">
+              <span class="text-[10px] text-gray-400 block font-sans">期權累計收租補貼</span>
+              <span class="text-sm font-bold text-green-400">
+                +${{ group.totalCollected.toFixed(0) }}
+              </span>
+            </div>
+            <div class="bg-black/30 p-2.5 rounded-xl border border-yellow-500/40">
+              <span class="text-[10px] text-yellow-400 block font-sans font-bold">本輪 Wheel 總結算淨損益</span>
+              <span class="text-sm font-extrabold" :class="(calculateStockRealizedPnL(ticker) + group.totalCollected) >= 0 ? 'text-green-400' : 'text-red-400'">
+                {{ (calculateStockRealizedPnL(ticker) + group.totalCollected) >= 0 ? '+' : '' }}${{ (calculateStockRealizedPnL(ticker) + group.totalCollected).toFixed(0) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- 模式 2: 正股持倉中 (保本價追蹤視圖) -->
+          <div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
             <div class="bg-black/30 p-2.5 rounded-xl">
               <span class="text-[10px] text-gray-400 block font-sans">正股買入成本</span>
               <span class="text-sm font-bold text-gray-200">
@@ -189,7 +227,7 @@
               </span>
             </div>
             <div class="bg-black/30 p-2.5 rounded-xl">
-              <span class="text-[10px] text-gray-400 block font-sans">正股現價 / 總盈虧</span>
+              <span class="text-[10px] text-gray-400 block font-sans">正股現價 / 浮動盈虧</span>
               <span class="text-sm font-bold" :class="calculateTotalStockPnL(ticker, group.totalCollected).pnl >= 0 ? 'text-green-400' : 'text-red-400'">
                 {{ calculateTotalStockPnL(ticker, group.totalCollected).label }}
               </span>
@@ -197,6 +235,7 @@
           </div>
         </div>
 
+        <!-- Options Ledger Table -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="bg-zinc-900/80 text-gray-400 border-b border-zinc-800">
@@ -206,7 +245,7 @@
                 <th class="p-3 text-center">持倉天數</th>
                 <th class="p-3 text-right">開倉租金</th>
                 <th class="p-3 text-right">結算 / 滾倉</th>
-                <th class="p-3 text-right">實收利潤 (P&L)</th>
+                <th class="p-3 text-right">實收租金 (P&L)</th>
                 <th class="p-3 text-center">操作</th>
               </tr>
             </thead>
@@ -261,7 +300,6 @@
 
     <!-- TAB 3: 損益日曆 (Calendar View) -->
     <section v-if="currentTab === 'calendar'" class="card p-5 rounded-2xl shadow-xl">
-      <!-- 月份切換控制器 -->
       <div class="flex justify-between items-center mb-4">
         <button @click="changeMonth(-1)" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold text-gray-300">
           <i class="fa-solid fa-chevron-left mr-1"></i> 上個月
@@ -272,11 +310,13 @@
         </button>
       </div>
 
-      <!-- 每月 Total 統計橫幅 -->
+      <!-- 每月 Total 統計橫幅 (包含正股損益穿透) -->
       <div class="mb-5 p-3.5 bg-gradient-to-r from-zinc-900 to-zinc-800/80 rounded-xl border border-zinc-700/70 flex justify-between items-center">
         <div>
-          <span class="text-xs text-gray-400 block font-sans">{{ calendarYear }} 年 {{ calendarMonth + 1 }} 月 實收總損益</span>
-          <span class="text-[11px] text-gray-500 font-mono">{{ currentMonthStats.count }} 筆合約已結算</span>
+          <span class="text-xs text-gray-400 block font-sans">{{ calendarYear }} 年 {{ calendarMonth + 1 }} 月 投資組合總淨損益</span>
+          <span class="text-[11px] text-gray-500 font-mono">
+            期權租金: ${{ currentMonthStats.optTotal.toFixed(0) }} | 正股結算: {{ currentMonthStats.stockTotal >= 0 ? '+' : '' }}${{ currentMonthStats.stockTotal.toFixed(0) }}
+          </span>
         </div>
         <div class="text-right">
           <span :class="['text-xl md:text-2xl font-black font-mono tracking-tight', currentMonthStats.total >= 0 ? 'text-green-400' : 'text-red-400']">
@@ -289,14 +329,15 @@
       <div class="grid grid-cols-7 gap-1.5 text-center text-xs">
         <div v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d" class="text-gray-500 font-bold pb-2">{{ d }}</div>
         <div v-for="(day, idx) in calendarDays" :key="idx"
-          :class="['h-20 p-1.5 rounded-xl border flex flex-col justify-between text-left transition',
+          :class="['h-24 p-1.5 rounded-xl border flex flex-col justify-between text-left transition overflow-hidden',
                    day.isCurrentMonth ? 'bg-zinc-900 border-zinc-800' : 'bg-black/20 border-transparent opacity-20']">
           <span class="text-[10px] font-bold text-gray-400">{{ day.dateNumber }}</span>
-          <div v-if="day.pnl !== 0" class="text-right">
-            <span :class="['text-[10px] md:text-xs font-mono font-bold block', day.pnl > 0 ? 'text-green-400' : 'text-red-400']">
-              {{ day.pnl > 0 ? '+' : '' }}${{ Math.round(day.pnl) }}
+          <div v-if="day.totalPnl !== 0" class="text-right">
+            <span :class="['text-[11px] md:text-xs font-mono font-bold block', day.totalPnl > 0 ? 'text-green-400' : 'text-red-400']">
+              {{ day.totalPnl > 0 ? '+' : '' }}${{ Math.round(day.totalPnl) }}
             </span>
-            <span class="text-[9px] text-gray-500 block truncate">{{ day.count }} 筆結算</span>
+            <span v-if="day.optPnl !== 0" class="text-[9px] text-gray-400 block truncate">租: {{ day.optPnl > 0 ? '+' : '' }}${{ Math.round(day.optPnl) }}</span>
+            <span v-if="day.stockPnl !== 0" class="text-[9px] text-yellow-400 block truncate">股: {{ day.stockPnl > 0 ? '+' : '' }}${{ Math.round(day.stockPnl) }}</span>
           </div>
         </div>
       </div>
@@ -306,31 +347,35 @@
     <section v-if="currentTab === 'analytics'" class="space-y-6">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">純收租勝率 <i class="fa-regular fa-circle-question"></i></span>
-          <div class="text-2xl font-extrabold text-green-400 mt-1 font-mono">{{ stats.winRate }}%</div>
-          <span class="text-[10px] text-gray-500">到期或獲利買回</span>
+          <span class="text-[11px] text-gray-400 block">累計純期權收租</span>
+          <div class="text-2xl font-extrabold text-green-400 mt-1 font-mono">+${{ stats.totalOptPnl.toFixed(0) }}</div>
+          <span class="text-[10px] text-gray-500">所有期權權利金</span>
         </div>
         <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">接貨率 <i class="fa-regular fa-circle-question"></i></span>
-          <div class="text-2xl font-extrabold text-yellow-400 mt-1 font-mono">{{ stats.assignedRate }}%</div>
-          <span class="text-[10px] text-gray-500">被指派 / 接正股</span>
+          <span class="text-[11px] text-gray-400 block">正股已實現損益</span>
+          <div class="text-2xl font-extrabold mt-1 font-mono" :class="stats.totalStockRealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'">
+            {{ stats.totalStockRealizedPnL >= 0 ? '+' : '' }}${{ stats.totalStockRealizedPnL.toFixed(0) }}
+          </div>
+          <span class="text-[10px] text-gray-500">已平倉/被Call走股票</span>
+        </div>
+        <div class="card p-4 rounded-2xl border border-green-500/30">
+          <span class="text-[11px] text-green-400 block font-bold">投資組合淨盈虧</span>
+          <div class="text-2xl font-extrabold mt-1 font-mono" :class="stats.totalNetPnL >= 0 ? 'text-green-400' : 'text-red-400'">
+            {{ stats.totalNetPnL >= 0 ? '+' : '' }}${{ stats.totalNetPnL.toFixed(0) }}
+          </div>
+          <span class="text-[10px] text-gray-500">租金 ＋ 正股已實現</span>
         </div>
         <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">平均年化報酬 (ROC)</span>
-          <div class="text-2xl font-extrabold text-green-400 mt-1 font-mono">{{ stats.annualizedReturn }}%</div>
-          <span class="text-[10px] text-gray-500">加權平均年化</span>
-        </div>
-        <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">已結算筆數</span>
-          <div class="text-2xl font-extrabold text-white mt-1 font-mono">{{ stats.settledCount }}</div>
-          <span class="text-[10px] text-gray-500">換約滾算 1 筆</span>
+          <span class="text-[11px] text-gray-400 block">平均年化報酬 (ROC)</span>
+          <div class="text-2xl font-extrabold text-white mt-1 font-mono">{{ stats.annualizedReturn }}%</div>
+          <span class="text-[10px] text-gray-500">期權本金加權年化</span>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-chart-column text-green-400"></i> 每月被動現金流 (Monthly Cashflow)
+            <i class="fa-solid fa-chart-column text-green-400"></i> 每月總損益分佈 (期權租金 vs 正股損益)
           </h3>
           <div class="relative h-56">
             <canvas id="monthlyChart"></canvas>
@@ -339,7 +384,7 @@
 
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-chart-pie text-blue-400"></i> 各標的累計收益分佈 (By Ticker)
+            <i class="fa-solid fa-chart-pie text-blue-400"></i> 各標的淨利潤佔比 (By Ticker)
           </h3>
           <div class="relative h-56 flex items-center justify-center">
             <canvas id="tickerChart"></canvas>
@@ -347,9 +392,10 @@
         </div>
       </div>
 
+      <!-- Leaderboard -->
       <div class="card p-5 rounded-2xl">
         <h3 class="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
-          <i class="fa-solid fa-trophy text-yellow-500"></i> 標的排行 (哪檔替你賺最多)
+          <i class="fa-solid fa-trophy text-yellow-500"></i> 標的總淨收益排行 (期權收租 + 正股已結算)
         </h3>
         <div class="space-y-3">
           <div v-for="(item, idx) in stats.tickerRanking" :key="item.ticker"
@@ -357,12 +403,17 @@
             <div class="flex items-center gap-3">
               <span class="w-5 text-center text-xs font-extrabold text-gray-500">{{ idx + 1 }}</span>
               <div>
-                <div class="font-extrabold text-white">{{ item.ticker }}</div>
-                <div class="text-[10px] text-gray-400">{{ item.count }} 筆 · 接貨率 {{ item.assignedRate }}%</div>
+                <div class="font-extrabold text-white flex items-center gap-2">
+                  {{ item.ticker }}
+                  <span v-if="getStockBasis(item.ticker).isSold" class="text-[10px] bg-red-900/60 text-red-300 px-1.5 py-0.2 rounded">已結算</span>
+                </div>
+                <div class="text-[10px] text-gray-400">
+                  期權: +${{ item.optPnl.toFixed(0) }} | 正股: {{ item.stockPnl >= 0 ? '+' : '' }}${{ item.stockPnl.toFixed(0) }}
+                </div>
               </div>
             </div>
-            <div class="font-mono font-bold text-sm" :class="item.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'">
-              {{ item.totalPnl >= 0 ? '+' : '' }}${{ item.totalPnl.toFixed(2) }}
+            <div class="font-mono font-bold text-sm" :class="item.totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'">
+              {{ item.totalNetPnl >= 0 ? '+' : '' }}${{ item.totalNetPnl.toFixed(2) }}
             </div>
           </div>
         </div>
@@ -424,28 +475,62 @@
       </div>
     </div>
 
-    <!-- 2. 正股底倉設定彈窗 (Stock Basis Modal) -->
+    <!-- 2. 正股底倉與賣出結算設定彈窗 (Stock Basis & Realized Modal) -->
     <div v-if="editingStockTicker" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
       <div class="card w-full max-w-md p-6 rounded-2xl shadow-2xl border border-zinc-700">
         <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
           <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-sliders text-blue-400"></i> 設定 {{ editingStockTicker }} 正股底倉
+            <i class="fa-solid fa-sliders text-blue-400"></i> 設定 {{ editingStockTicker }} 正股狀態
           </h3>
           <button @click="editingStockTicker = null" class="text-gray-400 hover:text-white text-xl">&times;</button>
         </div>
 
         <form @submit.prevent="saveStockBasis" class="space-y-4">
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">正股買入成本價 (每股 Cost)</label>
-            <input type="number" step="any" v-model.number="stockForm.cost" placeholder="如 413.36" class="w-full p-2.5 text-sm rounded-lg font-bold" />
+          <!-- 是否已賣出切換 -->
+          <div class="flex items-center justify-between p-3 bg-zinc-900 rounded-xl border border-zinc-800">
+            <span class="text-xs font-bold text-gray-200">正股目前狀態</span>
+            <div class="flex gap-2">
+              <button type="button" @click="stockForm.isSold = false"
+                :class="['px-3 py-1 rounded-lg text-xs font-bold transition', !stockForm.isSold ? 'bg-green-500 text-black' : 'bg-zinc-800 text-gray-400']">
+                🟢 持倉中
+              </button>
+              <button type="button" @click="stockForm.isSold = true"
+                :class="['px-3 py-1 rounded-lg text-xs font-bold transition', stockForm.isSold ? 'bg-red-500 text-white' : 'bg-zinc-800 text-gray-400']">
+                🔴 已賣出 / 已 Call 走
+              </button>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">持有股數 (Shares)</label>
-            <input type="number" v-model.number="stockForm.shares" placeholder="預設 100" class="w-full p-2.5 text-sm rounded-lg font-bold" />
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">正股買入成本價</label>
+              <input type="number" step="any" v-model.number="stockForm.cost" required placeholder="如 122.13" class="w-full p-2.5 text-sm rounded-lg font-bold font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">持有股數 (Shares)</label>
+              <input type="number" v-model.number="stockForm.shares" required placeholder="預設 100" class="w-full p-2.5 text-sm rounded-lg font-bold font-mono" />
+            </div>
           </div>
-          <div>
-            <label class="block text-xs text-gray-400 mb-1">目前正股市場現價 (Market Value)</label>
-            <input type="number" step="any" v-model.number="stockForm.mktPrice" placeholder="如 429.00" class="w-full p-2.5 text-sm rounded-lg font-bold text-green-400" />
+
+          <!-- 持倉中視圖 -->
+          <div v-if="!stockForm.isSold">
+            <label class="block text-xs text-gray-400 mb-1">目前市場現價 (Market Price)</label>
+            <input type="number" step="any" v-model.number="stockForm.mktPrice" placeholder="如 101.06" class="w-full p-2.5 text-sm rounded-lg font-bold text-green-400 font-mono" />
+          </div>
+
+          <!-- 已賣出視圖 -->
+          <div v-if="stockForm.isSold" class="p-3 bg-red-950/30 rounded-xl border border-red-900/50 space-y-3">
+            <span class="text-xs font-bold text-red-300 block">已平倉結算資料 (將記入日曆與分析)</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">賣出 / 被 Call 走日期</label>
+                <input type="date" v-model="stockForm.soldDate" required class="w-full p-2 text-xs rounded font-mono" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">實際賣出價格</label>
+                <input type="number" step="any" v-model.number="stockForm.soldPrice" required placeholder="如 101.06" class="w-full p-2 text-xs rounded font-bold text-yellow-400 font-mono" />
+              </div>
+            </div>
           </div>
 
           <div class="flex gap-2 pt-2">
@@ -474,11 +559,11 @@
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-xs text-gray-400 mb-1">開倉日期</label>
-              <input type="date" v-model="editingTrade.openDate" required class="w-full p-2 text-xs rounded-lg" />
+              <input type="date" v-model="editingTrade.openDate" required class="w-full p-2 text-xs rounded-lg font-mono" />
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">合約到期日</label>
-              <input type="date" v-model="editingTrade.expiryDate" required class="w-full p-2 text-xs rounded-lg" />
+              <input type="date" v-model="editingTrade.expiryDate" required class="w-full p-2 text-xs rounded-lg font-mono" />
             </div>
           </div>
 
@@ -489,11 +574,11 @@
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">張數</label>
-              <input type="number" v-model.number="editingTrade.contracts" min="1" class="w-full p-2 text-xs rounded-lg font-bold" />
+              <input type="number" v-model.number="editingTrade.contracts" min="1" class="w-full p-2 text-xs rounded-lg font-bold font-mono" />
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">行使價</label>
-              <input type="number" step="any" v-model.number="editingTrade.strike" class="w-full p-2 text-xs rounded-lg font-bold" />
+              <input type="number" step="any" v-model.number="editingTrade.strike" class="w-full p-2 text-xs rounded-lg font-bold font-mono" />
             </div>
           </div>
 
@@ -508,7 +593,7 @@
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">開倉租金 (Premium)</label>
-              <input type="number" step="any" v-model.number="editingTrade.openPremium" required class="w-full p-2 text-xs rounded-lg font-bold text-green-400" />
+              <input type="number" step="any" v-model.number="editingTrade.openPremium" required class="w-full p-2 text-xs rounded-lg font-bold text-green-400 font-mono" />
             </div>
           </div>
 
@@ -522,11 +607,11 @@
             <div v-if="editingTrade.isClosed" class="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800">
               <div>
                 <label class="block text-[10px] text-gray-400 mb-1">平倉日期</label>
-                <input type="date" v-model="editingTrade.closeDate" class="w-full p-1.5 text-xs rounded" />
+                <input type="date" v-model="editingTrade.closeDate" class="w-full p-1.5 text-xs rounded font-mono" />
               </div>
               <div>
                 <label class="block text-[10px] text-gray-400 mb-1">買回價格</label>
-                <input type="number" step="any" v-model.number="editingTrade.closePrice" class="w-full p-1.5 text-xs rounded font-bold text-yellow-400" />
+                <input type="number" step="any" v-model.number="editingTrade.closePrice" class="w-full p-1.5 text-xs rounded font-bold text-yellow-400 font-mono" />
               </div>
               <div>
                 <label class="block text-[10px] text-gray-400 mb-1">狀態</label>
@@ -557,7 +642,7 @@
 
     createApp({
       setup() {
-        const currentTab = ref('calendar');
+        const currentTab = ref('ledger');
         const tabs = [
           { id: 'input', name: '記賬錄入', icon: 'fa-solid fa-pen-to-square' },
           { id: 'ledger', name: '持倉總帳', icon: 'fa-solid fa-list-check' },
@@ -574,7 +659,7 @@
         const form = ref({
           openDate: getToday(),
           expiryDate: getToday(),
-          ticker: 'NVDA',
+          ticker: 'INTC',
           contracts: 1,
           strategy: 'Covered Call',
           strike: null,
@@ -595,7 +680,7 @@
         });
 
         const editingStockTicker = ref(null);
-        const stockForm = ref({ cost: null, shares: 100, mktPrice: null });
+        const stockForm = ref({ isSold: false, cost: null, shares: 100, mktPrice: null, soldDate: getToday(), soldPrice: null });
         const editingTrade = ref(null);
 
         const getHoldingDays = (t) => {
@@ -612,7 +697,13 @@
           return diff * t.contracts * 100;
         };
 
-        const getStockBasis = (ticker) => stockBases.value[ticker] || { cost: 0, shares: 100, mktPrice: 0 };
+        const getStockBasis = (ticker) => stockBases.value[ticker] || { isSold: false, cost: 0, shares: 100, mktPrice: 0, soldDate: '', soldPrice: 0 };
+
+        const calculateStockRealizedPnL = (ticker) => {
+          const basis = getStockBasis(ticker);
+          if (!basis.isSold || !basis.cost || !basis.soldPrice) return 0;
+          return (basis.soldPrice - basis.cost) * (basis.shares || 100);
+        };
 
         const calculateNetCost = (ticker, totalCollected) => {
           const basis = getStockBasis(ticker);
@@ -636,7 +727,14 @@
         const openStockBasisModal = (ticker) => {
           editingStockTicker.value = ticker;
           const existing = getStockBasis(ticker);
-          stockForm.value = { cost: existing.cost || null, shares: existing.shares || 100, mktPrice: existing.mktPrice || null };
+          stockForm.value = {
+            isSold: !!existing.isSold,
+            cost: existing.cost || null,
+            shares: existing.shares || 100,
+            mktPrice: existing.mktPrice || null,
+            soldDate: existing.soldDate || getToday(),
+            soldPrice: existing.soldPrice || null
+          };
         };
 
         const saveStockBasis = () => {
@@ -685,7 +783,7 @@
           trades.value.unshift(newTrade);
           persist();
           rollingTrade.value = null;
-          alert('滾倉成功！舊合約已結算，新合約已加入總帳。');
+          alert('滾倉成功！');
         };
 
         onMounted(() => {
@@ -702,7 +800,7 @@
         const persist = () => localStorage.setItem('opt_trades', JSON.stringify(trades.value));
 
         const promptAddTicker = () => {
-          const t = prompt('請輸入股票代碼 (如 NVDA, QQQ):');
+          const t = prompt('請輸入股票代碼:');
           if (t) {
             const clean = t.trim().toUpperCase();
             if (clean && !commonTickers.value.includes(clean)) {
@@ -751,9 +849,8 @@
           return map;
         });
 
-        // 損益日曆與當月 Total 邏輯
         const calendarYear = ref(2026);
-        const calendarMonth = ref(7); // 8月 (0-indexed)
+        const calendarMonth = ref(6); // 預設 7月 (0-indexed 6)
 
         const changeMonth = (delta) => {
           calendarMonth.value += delta;
@@ -761,22 +858,28 @@
           else if (calendarMonth.value > 11) { calendarMonth.value = 0; calendarYear.value++; }
         };
 
-        // 當月累計盈虧與筆數計算
+        // 當月累計盈虧 (包含期權 + 正股已賣出)
         const currentMonthStats = computed(() => {
           const y = calendarYear.value, m = calendarMonth.value;
           const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
-          let total = 0;
-          let count = 0;
+          let optTotal = 0;
+          let stockTotal = 0;
 
           trades.value.filter(t => t.isClosed).forEach(t => {
             const dateKey = t.closeDate || t.expiryDate;
             if (dateKey && dateKey.startsWith(monthPrefix)) {
-              total += calculatePnL(t);
-              count++;
+              optTotal += calculatePnL(t);
             }
           });
 
-          return { total, count };
+          Object.keys(stockBases.value).forEach(ticker => {
+            const basis = stockBases.value[ticker];
+            if (basis.isSold && basis.soldDate && basis.soldDate.startsWith(monthPrefix)) {
+              stockTotal += calculateStockRealizedPnL(ticker);
+            }
+          });
+
+          return { optTotal, stockTotal, total: optTotal + stockTotal };
         });
 
         const calendarDays = computed(() => {
@@ -785,35 +888,46 @@
           const totalDays = new Date(y, m + 1, 0).getDate();
           const days = [];
 
-          const pnlMap = {};
+          const dayMap = {};
+
+          // 匯總期權
           trades.value.filter(t => t.isClosed).forEach(t => {
             const dateKey = t.closeDate || t.expiryDate;
-            if (!pnlMap[dateKey]) pnlMap[dateKey] = { pnl: 0, count: 0 };
-            pnlMap[dateKey].pnl += calculatePnL(t);
-            pnlMap[dateKey].count++;
+            if (!dayMap[dateKey]) dayMap[dateKey] = { optPnl: 0, stockPnl: 0 };
+            dayMap[dateKey].optPnl += calculatePnL(t);
+          });
+
+          // 匯總已賣出正股
+          Object.keys(stockBases.value).forEach(ticker => {
+            const basis = stockBases.value[ticker];
+            if (basis.isSold && basis.soldDate) {
+              const dateKey = basis.soldDate;
+              if (!dayMap[dateKey]) dayMap[dateKey] = { optPnl: 0, stockPnl: 0 };
+              dayMap[dateKey].stockPnl += calculateStockRealizedPnL(ticker);
+            }
           });
 
           for (let i = 0; i < firstDay; i++) days.push({ isCurrentMonth: false, dateNumber: '' });
           for (let d = 1; d <= totalDays; d++) {
             const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const info = pnlMap[dateStr] || { pnl: 0, count: 0 };
-            days.push({ isCurrentMonth: true, dateNumber: d, pnl: info.pnl, count: info.count });
+            const info = dayMap[dateStr] || { optPnl: 0, stockPnl: 0 };
+            const totalPnl = info.optPnl + info.stockPnl;
+            days.push({ isCurrentMonth: true, dateNumber: d, optPnl: info.optPnl, stockPnl: info.stockPnl, totalPnl });
           }
           return days;
         });
 
+        // 數據分析看板統計
         const stats = computed(() => {
           const closed = trades.value.filter(t => t.isClosed);
-          const settledCount = closed.length;
-          if (settledCount === 0) return { winRate: '0.0', assignedRate: '0.0', annualizedReturn: '0.0', settledCount: 0, tickerRanking: [] };
-
-          let wins = 0, assigned = 0, totalAnnualizedSum = 0, validAnnualizedCount = 0;
+          let totalOptPnl = 0;
+          let totalAnnualizedSum = 0;
+          let validAnnualizedCount = 0;
           const tickerStats = {};
 
           closed.forEach(t => {
             const pnl = calculatePnL(t);
-            if (pnl >= 0) wins++;
-            if (t.status === 'assigned') assigned++;
+            totalOptPnl += pnl;
 
             const days = getHoldingDays(t);
             const capitalAtRisk = (t.strike || 100) * 100 * (t.contracts || 1);
@@ -823,22 +937,31 @@
               validAnnualizedCount++;
             }
 
-            if (!tickerStats[t.ticker]) tickerStats[t.ticker] = { ticker: t.ticker, totalPnl: 0, count: 0, assigned: 0 };
-            tickerStats[t.ticker].totalPnl += pnl;
-            tickerStats[t.ticker].count++;
-            if (t.status === 'assigned') tickerStats[t.ticker].assigned++;
+            if (!tickerStats[t.ticker]) tickerStats[t.ticker] = { ticker: t.ticker, optPnl: 0, stockPnl: 0, totalNetPnl: 0 };
+            tickerStats[t.ticker].optPnl += pnl;
+          });
+
+          let totalStockRealizedPnL = 0;
+          Object.keys(stockBases.value).forEach(ticker => {
+            const basis = stockBases.value[ticker];
+            if (basis.isSold) {
+              const stockPnl = calculateStockRealizedPnL(ticker);
+              totalStockRealizedPnL += stockPnl;
+              if (!tickerStats[ticker]) tickerStats[ticker] = { ticker, optPnl: 0, stockPnl: 0, totalNetPnl: 0 };
+              tickerStats[ticker].stockPnl += stockPnl;
+            }
           });
 
           const ranking = Object.values(tickerStats).map(item => ({
             ...item,
-            assignedRate: ((item.assigned / item.count) * 100).toFixed(1)
-          })).sort((a, b) => b.totalPnl - a.totalPnl);
+            totalNetPnl: item.optPnl + item.stockPnl
+          })).sort((a, b) => b.totalNetPnl - a.totalNetPnl);
 
           return {
-            winRate: ((wins / settledCount) * 100).toFixed(1),
-            assignedRate: ((assigned / settledCount) * 100).toFixed(1),
+            totalOptPnl,
+            totalStockRealizedPnL,
+            totalNetPnL: totalOptPnl + totalStockRealizedPnL,
             annualizedReturn: validAnnualizedCount > 0 ? (totalAnnualizedSum / validAnnualizedCount).toFixed(1) : '0.0',
-            settledCount,
             tickerRanking: ranking
           };
         });
@@ -855,29 +978,38 @@
             const monthlyMap = {};
             trades.value.filter(t => t.isClosed).forEach(t => {
               const date = t.closeDate || t.expiryDate;
-              const monthKey = date.slice(0, 7);
-              monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + calculatePnL(t);
+              const m = date.slice(0, 7);
+              if (!monthlyMap[m]) monthlyMap[m] = { opt: 0, stock: 0 };
+              monthlyMap[m].opt += calculatePnL(t);
+            });
+
+            Object.keys(stockBases.value).forEach(ticker => {
+              const basis = stockBases.value[ticker];
+              if (basis.isSold && basis.soldDate) {
+                const m = basis.soldDate.slice(0, 7);
+                if (!monthlyMap[m]) monthlyMap[m] = { opt: 0, stock: 0 };
+                monthlyMap[m].stock += calculateStockRealizedPnL(ticker);
+              }
             });
 
             const months = Object.keys(monthlyMap).sort();
-            const monthlyValues = months.map(m => monthlyMap[m]);
+            const optValues = months.map(m => monthlyMap[m].opt);
+            const stockValues = months.map(m => monthlyMap[m].stock);
 
             if (monthlyChartInst) monthlyChartInst.destroy();
             monthlyChartInst = new Chart(monthlyCtx, {
               type: 'bar',
               data: {
                 labels: months,
-                datasets: [{
-                  label: '實收租金 ($)',
-                  data: monthlyValues,
-                  backgroundColor: '#22c55e',
-                  borderRadius: 6
-                }]
+                datasets: [
+                  { label: '期權租金', data: optValues, backgroundColor: '#22c55e', borderRadius: 4 },
+                  { label: '正股已實現', data: stockValues, backgroundColor: '#ef4444', borderRadius: 4 }
+                ]
               },
               options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: { legend: { position: 'bottom', labels: { color: '#a1a1aa' } } },
                 scales: {
                   y: { grid: { color: '#27272a' }, ticks: { color: '#a1a1aa' } },
                   x: { grid: { display: false }, ticks: { color: '#a1a1aa' } }
@@ -886,7 +1018,7 @@
             });
 
             const tickerLabels = stats.value.tickerRanking.map(i => i.ticker);
-            const tickerValues = stats.value.tickerRanking.map(i => i.totalPnl);
+            const tickerValues = stats.value.tickerRanking.map(i => i.totalNetPnl);
 
             if (tickerChartInst) tickerChartInst.destroy();
             tickerChartInst = new Chart(tickerCtx, {
@@ -895,16 +1027,14 @@
                 labels: tickerLabels,
                 datasets: [{
                   data: tickerValues,
-                  backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'],
+                  backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'],
                   borderWidth: 0
                 }]
               },
               options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                  legend: { position: 'bottom', labels: { color: '#d4d4d8', boxWidth: 12 } }
-                }
+                plugins: { legend: { position: 'bottom', labels: { color: '#d4d4d8', boxWidth: 12 } } }
               }
             });
           });
@@ -957,7 +1087,7 @@
           stats, exportData, importData,
           rollingTrade, rollForm, openRollModal, submitRoll,
           editingStockTicker, stockForm, openStockBasisModal, saveStockBasis,
-          getStockBasis, calculateNetCost, calculateTotalStockPnL
+          getStockBasis, calculateNetCost, calculateTotalStockPnL, calculateStockRealizedPnL
         };
       }
     }).mount('#app');
