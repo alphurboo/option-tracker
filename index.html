@@ -89,7 +89,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs text-gray-400 mb-1">標的代碼 (TICKER)</label>
-            <input type="text" v-model="form.ticker" required placeholder="如 TSM, GOOG" class="w-full p-2.5 rounded-lg uppercase text-sm font-bold" />
+            <input type="text" v-model="form.ticker" required placeholder="如 NVDA, TSM" class="w-full p-2.5 rounded-lg uppercase text-sm font-bold" />
           </div>
           <div>
             <label class="block text-xs text-gray-400 mb-1">張數 (CONTRACTS)</label>
@@ -109,11 +109,11 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs text-gray-400 mb-1">行使價 / 底價 (STRIKE)</label>
-            <input type="number" step="any" v-model.number="form.strike" required placeholder="480" class="w-full p-2.5 rounded-lg text-sm font-bold" />
+            <input type="number" step="any" v-model.number="form.strike" required placeholder="如 120" class="w-full p-2.5 rounded-lg text-sm font-bold" />
           </div>
           <div>
             <label class="block text-xs text-gray-400 mb-1">每股權利金 / 租金 (PREMIUM)</label>
-            <input type="number" step="any" v-model.number="form.openPremium" required placeholder="6.6" class="w-full p-2.5 rounded-lg text-sm font-bold text-green-400" />
+            <input type="number" step="any" v-model.number="form.openPremium" required placeholder="如 3.50" class="w-full p-2.5 rounded-lg text-sm font-bold text-green-400" />
           </div>
         </div>
 
@@ -131,7 +131,7 @@
             </div>
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">買回價格</label>
-              <input type="number" step="any" v-model.number="form.closePrice" placeholder="3.1" class="w-full p-1.5 text-xs rounded font-bold text-yellow-400" />
+              <input type="number" step="any" v-model.number="form.closePrice" placeholder="如 1.20" class="w-full p-1.5 text-xs rounded font-bold text-yellow-400" />
             </div>
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">結算狀態</label>
@@ -153,11 +153,12 @@
     <!-- TAB 2: 持倉總帳與正股底倉 (Ledger & Net Cost) -->
     <section v-if="currentTab === 'ledger'" class="space-y-6">
       <div v-if="Object.keys(groupedTrades).length === 0" class="card p-8 rounded-2xl text-center text-gray-500">
-        暫無交易記錄，請先在「記賬錄入」新增期權操作。
+        <i class="fa-solid fa-folder-open text-3xl mb-3 block text-gray-600"></i>
+        暫無交易記錄，請點擊上方「匯入」上傳備份檔，或在「記賬錄入」新增合約。
       </div>
 
       <div v-for="(group, ticker) in groupedTrades" :key="ticker" class="card rounded-2xl overflow-hidden border border-zinc-800 shadow-xl">
-        <!-- Stock Basis Dashboard (Excel Logic) -->
+        <!-- Stock Basis Dashboard -->
         <div class="bg-gradient-to-r from-zinc-900 to-zinc-800 p-4 border-b border-zinc-700">
           <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
             <div class="flex items-center gap-2">
@@ -243,15 +244,12 @@
                 </td>
                 <td class="p-3 text-center">
                   <div class="flex justify-center items-center gap-1.5">
-                    <!-- 一鍵滾倉按鈕 -->
                     <button v-if="!t.isClosed" @click="openRollModal(t)" class="px-2 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded text-[11px] font-sans font-bold flex items-center gap-1">
                       <i class="fa-solid fa-arrows-rotate"></i> 滾倉
                     </button>
-                    <!-- 編輯按鈕 -->
                     <button @click="openEditModal(t)" class="text-gray-400 hover:text-green-400 p-1.5" title="編輯">
                       <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <!-- 刪除按鈕 -->
                     <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 p-1.5" title="刪除">
                       <i class="fa-solid fa-trash-can"></i>
                     </button>
@@ -294,7 +292,6 @@
 
     <!-- TAB 4: 視覺化圖表與數據分析看板 (Visual Analytics) -->
     <section v-if="currentTab === 'analytics'" class="space-y-6">
-      <!-- 4 Top KPI Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="card p-4 rounded-2xl">
           <span class="text-[11px] text-gray-400 flex items-center gap-1">純收租勝率 <i class="fa-regular fa-circle-question"></i></span>
@@ -320,7 +317,6 @@
 
       <!-- Charts Row (Chart.js) -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Chart 1: Monthly Cashflow -->
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
             <i class="fa-solid fa-chart-column text-green-400"></i> 每月被動現金流 (Monthly Cashflow)
@@ -330,7 +326,6 @@
           </div>
         </div>
 
-        <!-- Chart 2: Profit by Ticker -->
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
             <i class="fa-solid fa-chart-pie text-blue-400"></i> 各標的累計收益分佈 (By Ticker)
@@ -375,7 +370,6 @@
         </div>
 
         <form @submit.prevent="submitRoll" class="space-y-4">
-          <!-- Step 1: Close current -->
           <div class="p-3 bg-zinc-900 rounded-xl border border-zinc-800">
             <span class="text-xs font-bold text-yellow-400 block mb-2">步驟 1: 平倉當前合約</span>
             <div class="grid grid-cols-2 gap-3">
@@ -390,7 +384,6 @@
             </div>
           </div>
 
-          <!-- Step 2: Open new -->
           <div class="p-3 bg-zinc-900 rounded-xl border border-zinc-800 space-y-3">
             <span class="text-xs font-bold text-green-400 block">步驟 2: 開立新一期滾倉合約</span>
             <div class="grid grid-cols-2 gap-3">
@@ -562,20 +555,19 @@
           { id: 'analytics', name: '視覺分析', icon: 'fa-solid fa-chart-simple' }
         ];
 
-        const commonTickers = ref(['NFLX', 'NVDA', 'TSM', 'INTC', 'GOOG', 'EXE']);
+        const commonTickers = ref(['NFLX', 'NVDA', 'TSM', 'GOOG', 'EXE']);
         const trades = ref([]);
-        const stockBases = ref({}); // { TSM: { cost: 413.36, shares: 100, mktPrice: 429 } }
+        const stockBases = ref({});
 
         const getToday = () => new Date().toISOString().split('T')[0];
 
-        // 表單狀態
         const form = ref({
           openDate: getToday(),
           expiryDate: getToday(),
-          ticker: 'TSM',
+          ticker: 'NVDA',
           contracts: 1,
           strategy: 'Covered Call',
-          strike: 480,
+          strike: null,
           openPremium: null,
           isClosed: false,
           closeDate: getToday(),
@@ -583,7 +575,6 @@
           status: 'closed'
         });
 
-        // 滾倉相關
         const rollingTrade = ref(null);
         const rollForm = ref({
           closeDate: getToday(),
@@ -593,14 +584,10 @@
           newPremium: null
         });
 
-        // 正股底倉相關
         const editingStockTicker = ref(null);
         const stockForm = ref({ cost: null, shares: 100, mktPrice: null });
-
-        // 一般編輯
         const editingTrade = ref(null);
 
-        // 持倉日數計算
         const getHoldingDays = (t) => {
           const start = new Date(t.openDate);
           const end = t.isClosed ? new Date(t.closeDate || t.expiryDate) : new Date();
@@ -609,14 +596,12 @@
           return Math.max(1, days);
         };
 
-        // 盈虧計算
         const calculatePnL = (t) => {
           if (!t.isClosed) return 0;
           const diff = (t.openPremium - (t.closePrice || 0));
           return diff * t.contracts * 100;
         };
 
-        // 正股底倉讀取與計算
         const getStockBasis = (ticker) => stockBases.value[ticker] || { cost: 0, shares: 100, mktPrice: 0 };
 
         const calculateNetCost = (ticker, totalCollected) => {
@@ -638,7 +623,6 @@
           };
         };
 
-        // 開啟正股底倉彈窗
         const openStockBasisModal = (ticker) => {
           editingStockTicker.value = ticker;
           const existing = getStockBasis(ticker);
@@ -653,7 +637,6 @@
           }
         };
 
-        // 一鍵滾倉邏輯
         const openRollModal = (t) => {
           rollingTrade.value = t;
           rollForm.value = {
@@ -669,13 +652,11 @@
           if (!rollingTrade.value) return;
           const old = rollingTrade.value;
 
-          // 1. 平掉舊合約
           old.isClosed = true;
           old.closeDate = rollForm.value.closeDate;
           old.closePrice = Number(rollForm.value.closePrice);
           old.status = 'closed';
 
-          // 2. 開立新合約
           const newTrade = {
             id: Date.now(),
             ticker: old.ticker,
@@ -697,37 +678,15 @@
           alert('滾倉成功！舊合約已結算，新合約已加入總帳。');
         };
 
-        // LocalStorage & 預設載入
         onMounted(() => {
           const savedTickers = localStorage.getItem('opt_tickers');
           if (savedTickers) commonTickers.value = JSON.parse(savedTickers);
 
           const savedBases = localStorage.getItem('opt_stock_bases');
           if (savedBases) stockBases.value = JSON.parse(savedBases);
-          else {
-            // 預設載入你 Excel 中的底倉數值
-            stockBases.value = {
-              TSM: { cost: 413.36, shares: 100, mktPrice: 429 },
-              GOOG: { cost: 369.08, shares: 100, mktPrice: 355 }
-            };
-            localStorage.setItem('opt_stock_bases', JSON.stringify(stockBases.value));
-          }
 
           const savedTrades = localStorage.getItem('opt_trades');
           if (savedTrades) trades.value = JSON.parse(savedTrades);
-          else {
-            // 預設載入你 Excel 中的滾倉記錄
-            trades.value = [
-              { id: 1, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-07-21', expiryDate: '2026-08-21', strike: 480, contracts: 1, openPremium: 6.6, isClosed: true, closeDate: '2026-08-04', closePrice: 3.1, status: 'closed' },
-              { id: 2, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-08-04', expiryDate: '2026-08-28', strike: 465, contracts: 1, openPremium: 5.5, isClosed: true, closeDate: '2026-08-12', closePrice: 2.75, status: 'closed' },
-              { id: 3, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-08-12', expiryDate: '2026-09-18', strike: 480, contracts: 1, openPremium: 6.1, isClosed: true, closeDate: '2026-08-20', closePrice: 2.0, status: 'closed' },
-              { id: 4, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-06-09', expiryDate: '2026-07-10', strike: 400, contracts: 1, openPremium: 3.8, isClosed: true, closeDate: '2026-06-15', closePrice: 2.45, status: 'closed' },
-              { id: 5, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-06-15', expiryDate: '2026-07-17', strike: 400, contracts: 1, openPremium: 3.65, isClosed: true, closeDate: '2026-07-06', closePrice: 2.55, status: 'closed' },
-              { id: 6, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-07-06', expiryDate: '2026-07-31', strike: 400, contracts: 1, openPremium: 3.8, isClosed: true, closeDate: '2026-08-03', closePrice: 2.0, status: 'closed' },
-              { id: 7, ticker: 'GOOG', strategy: 'Covered Call', openDate: '2026-08-03', expiryDate: '2026-09-18', strike: 420, contracts: 1, openPremium: 4.5, isClosed: true, closeDate: '2026-08-20', closePrice: 2.25, status: 'closed' }
-            ];
-            persist();
-          }
         });
 
         const persist = () => localStorage.setItem('opt_trades', JSON.stringify(trades.value));
@@ -772,7 +731,6 @@
           }
         };
 
-        // 按標的分組
         const groupedTrades = computed(() => {
           const map = {};
           trades.value.forEach(t => {
@@ -783,7 +741,6 @@
           return map;
         });
 
-        // 日曆邏輯
         const calendarYear = ref(2026);
         const calendarMonth = ref(7);
         const changeMonth = (delta) => {
@@ -815,7 +772,6 @@
           return days;
         });
 
-        // 統計分析
         const stats = computed(() => {
           const closed = trades.value.filter(t => t.isClosed);
           const settledCount = closed.length;
@@ -857,7 +813,6 @@
           };
         });
 
-        // 圖表渲染 (Chart.js)
         let monthlyChartInst = null;
         let tickerChartInst = null;
 
@@ -867,11 +822,10 @@
             const tickerCtx = document.getElementById('tickerChart');
             if (!monthlyCtx || !tickerCtx) return;
 
-            // 1. 每月現金流匯總
             const monthlyMap = {};
             trades.value.filter(t => t.isClosed).forEach(t => {
               const date = t.closeDate || t.expiryDate;
-              const monthKey = date.slice(0, 7); // YYYY-MM
+              const monthKey = date.slice(0, 7);
               monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + calculatePnL(t);
             });
 
@@ -901,7 +855,6 @@
               }
             });
 
-            // 2. 標的分佈圓餅圖
             const tickerLabels = stats.value.tickerRanking.map(i => i.ticker);
             const tickerValues = stats.value.tickerRanking.map(i => i.totalPnl);
 
@@ -932,7 +885,6 @@
           if (tabId === 'analytics') renderCharts();
         };
 
-        // 備份與匯入
         const exportData = () => {
           const payload = { trades: trades.value, tickers: commonTickers.value, stockBases: stockBases.value };
           const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -958,6 +910,8 @@
                 trades.value = parsed;
               }
               persist();
+              localStorage.setItem('opt_stock_bases', JSON.stringify(stockBases.value));
+              localStorage.setItem('opt_tickers', JSON.stringify(commonTickers.value));
               alert('匯入成功！');
             } catch (err) {
               alert('檔案格式錯誤');
