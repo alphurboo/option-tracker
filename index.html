@@ -158,7 +158,6 @@
       </div>
 
       <div v-for="(group, ticker) in groupedTrades" :key="ticker" class="card rounded-2xl overflow-hidden border border-zinc-800 shadow-xl">
-        <!-- Stock Basis Dashboard -->
         <div class="bg-gradient-to-r from-zinc-900 to-zinc-800 p-4 border-b border-zinc-700">
           <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
             <div class="flex items-center gap-2">
@@ -170,7 +169,6 @@
             </button>
           </div>
 
-          <!-- Net Cost Summary Row -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-zinc-700/60 font-mono text-xs">
             <div class="bg-black/30 p-2.5 rounded-xl">
               <span class="text-[10px] text-gray-400 block font-sans">正股買入成本</span>
@@ -199,7 +197,6 @@
           </div>
         </div>
 
-        <!-- Options Ledger Table -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="bg-zinc-900/80 text-gray-400 border-b border-zinc-800">
@@ -264,7 +261,8 @@
 
     <!-- TAB 3: 損益日曆 (Calendar View) -->
     <section v-if="currentTab === 'calendar'" class="card p-5 rounded-2xl shadow-xl">
-      <div class="flex justify-between items-center mb-5">
+      <!-- 月份切換控制器 -->
+      <div class="flex justify-between items-center mb-4">
         <button @click="changeMonth(-1)" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold text-gray-300">
           <i class="fa-solid fa-chevron-left mr-1"></i> 上個月
         </button>
@@ -274,6 +272,20 @@
         </button>
       </div>
 
+      <!-- 每月 Total 統計橫幅 -->
+      <div class="mb-5 p-3.5 bg-gradient-to-r from-zinc-900 to-zinc-800/80 rounded-xl border border-zinc-700/70 flex justify-between items-center">
+        <div>
+          <span class="text-xs text-gray-400 block font-sans">{{ calendarYear }} 年 {{ calendarMonth + 1 }} 月 實收總損益</span>
+          <span class="text-[11px] text-gray-500 font-mono">{{ currentMonthStats.count }} 筆合約已結算</span>
+        </div>
+        <div class="text-right">
+          <span :class="['text-xl md:text-2xl font-black font-mono tracking-tight', currentMonthStats.total >= 0 ? 'text-green-400' : 'text-red-400']">
+            {{ currentMonthStats.total >= 0 ? '+' : '' }}${{ currentMonthStats.total.toFixed(2) }}
+          </span>
+        </div>
+      </div>
+
+      <!-- 日曆網格 -->
       <div class="grid grid-cols-7 gap-1.5 text-center text-xs">
         <div v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d" class="text-gray-500 font-bold pb-2">{{ d }}</div>
         <div v-for="(day, idx) in calendarDays" :key="idx"
@@ -315,7 +327,6 @@
         </div>
       </div>
 
-      <!-- Charts Row (Chart.js) -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
@@ -336,7 +347,6 @@
         </div>
       </div>
 
-      <!-- Leaderboard -->
       <div class="card p-5 rounded-2xl">
         <h3 class="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
           <i class="fa-solid fa-trophy text-yellow-500"></i> 標的排行 (哪檔替你賺最多)
@@ -547,7 +557,7 @@
 
     createApp({
       setup() {
-        const currentTab = ref('ledger');
+        const currentTab = ref('calendar');
         const tabs = [
           { id: 'input', name: '記賬錄入', icon: 'fa-solid fa-pen-to-square' },
           { id: 'ledger', name: '持倉總帳', icon: 'fa-solid fa-list-check' },
@@ -555,7 +565,7 @@
           { id: 'analytics', name: '視覺分析', icon: 'fa-solid fa-chart-simple' }
         ];
 
-        const commonTickers = ref(['NFLX', 'NVDA', 'TSM', 'GOOG', 'EXE']);
+        const commonTickers = ref(['TSM', 'GOOG', 'INTC', 'NVDA', 'ONDS', 'USAR', 'NFLX', 'EXE']);
         const trades = ref([]);
         const stockBases = ref({});
 
@@ -741,13 +751,33 @@
           return map;
         });
 
+        // 損益日曆與當月 Total 邏輯
         const calendarYear = ref(2026);
-        const calendarMonth = ref(7);
+        const calendarMonth = ref(7); // 8月 (0-indexed)
+
         const changeMonth = (delta) => {
           calendarMonth.value += delta;
           if (calendarMonth.value < 0) { calendarMonth.value = 11; calendarYear.value--; }
           else if (calendarMonth.value > 11) { calendarMonth.value = 0; calendarYear.value++; }
         };
+
+        // 當月累計盈虧與筆數計算
+        const currentMonthStats = computed(() => {
+          const y = calendarYear.value, m = calendarMonth.value;
+          const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
+          let total = 0;
+          let count = 0;
+
+          trades.value.filter(t => t.isClosed).forEach(t => {
+            const dateKey = t.closeDate || t.expiryDate;
+            if (dateKey && dateKey.startsWith(monthPrefix)) {
+              total += calculatePnL(t);
+              count++;
+            }
+          });
+
+          return { total, count };
+        });
 
         const calendarDays = computed(() => {
           const y = calendarYear.value, m = calendarMonth.value;
@@ -923,7 +953,7 @@
         return {
           currentTab, tabs, switchTab, commonTickers, promptAddTicker, removeTicker, form, saveRecord, deleteTrade,
           editingTrade, openEditModal, saveEdit, getHoldingDays,
-          groupedTrades, calculatePnL, calendarYear, calendarMonth, changeMonth, calendarDays,
+          groupedTrades, calculatePnL, calendarYear, calendarMonth, changeMonth, calendarDays, currentMonthStats,
           stats, exportData, importData,
           rollingTrade, rollForm, openRollModal, submitRoll,
           editingStockTicker, stockForm, openStockBasisModal, saveStockBasis,
