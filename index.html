@@ -7,7 +7,7 @@
   <!-- Tailwind CSS & Vue 3 -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <!-- Google Font & Icons -->
+  <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <style>
     body { background-color: #121212; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -19,7 +19,7 @@
     input:focus, select:focus { border-color: #22c55e; outline: none; }
   </style>
 </head>
-<body class="p-3 md:p-6 pb-20 max-w-5xl mx-auto">
+<body class="p-3 md:p-6 pb-24 max-w-5xl mx-auto">
   <div id="app">
     <!-- Top Header -->
     <header class="flex justify-between items-center mb-6 pb-3 border-b border-gray-800">
@@ -30,10 +30,10 @@
         <p class="text-xs text-gray-400">期權收租滾倉 · 損益日曆 · 統計分析</p>
       </div>
       <div class="flex gap-2">
-        <button @click="exportData" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-700">
+        <button @click="exportData" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700">
           <i class="fa-solid fa-download mr-1"></i> 備份
         </button>
-        <label class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-700 cursor-pointer">
+        <label class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700 cursor-pointer">
           <i class="fa-solid fa-upload mr-1"></i> 匯入
           <input type="file" @change="importData" class="hidden" accept=".json" />
         </label>
@@ -52,17 +52,25 @@
 
     <!-- TAB 1: 記賬錄入 (Input Form) -->
     <section v-if="currentTab === 'input'" class="card p-5 rounded-2xl shadow-xl">
-      <div class="mb-4">
-        <label class="block text-xs text-gray-400 mb-2">常用標的</label>
+      <!-- 常用標的管理 -->
+      <div class="mb-5 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800">
+        <div class="flex justify-between items-center mb-2">
+          <label class="text-xs font-semibold text-gray-400">常用標的 (點擊套用 / 點 × 刪除)</label>
+          <button @click="promptAddTicker" class="text-xs text-green-400 hover:underline flex items-center gap-1">
+            <i class="fa-solid fa-plus"></i> 新增標的
+          </button>
+        </div>
         <div class="flex flex-wrap gap-2 items-center">
-          <button v-for="t in commonTickers" :key="t" @click="form.ticker = t"
-            :class="['px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition',
-                     form.ticker === t ? 'bg-green-500 text-black' : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700']">
-            {{ t }}
-          </button>
-          <button @click="addCommonTicker" class="w-7 h-7 rounded-full border border-dashed border-gray-600 text-gray-400 flex items-center justify-center hover:border-green-500 hover:text-green-500 text-sm">
-            +
-          </button>
+          <div v-for="t in commonTickers" :key="t" 
+               class="flex items-center rounded-lg overflow-hidden border border-zinc-700"
+               :class="form.ticker === t ? 'bg-green-500 text-black border-green-500' : 'bg-zinc-800 text-gray-300'">
+            <button type="button" @click="form.ticker = t" class="px-2.5 py-1 text-xs font-bold uppercase">
+              {{ t }}
+            </button>
+            <button type="button" @click.stop="removeTicker(t)" class="px-1.5 py-1 text-xs hover:bg-black/20 text-current border-l border-black/10">
+              &times;
+            </button>
+          </div>
         </div>
       </div>
 
@@ -81,7 +89,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs text-gray-400 mb-1">標的代碼 (TICKER)</label>
-            <input type="text" v-model="form.ticker" required placeholder="如 TSM, GOOG, EXE" class="w-full p-2.5 rounded-lg uppercase text-sm font-bold" />
+            <input type="text" v-model="form.ticker" required placeholder="如 TSM, GOOG" class="w-full p-2.5 rounded-lg uppercase text-sm font-bold" />
           </div>
           <div>
             <label class="block text-xs text-gray-400 mb-1">張數 (CONTRACTS)</label>
@@ -95,14 +103,13 @@
             <option value="Sell Put">出租收租 (Sell Put / Cash-Secured Put)</option>
             <option value="Covered Call">備兌收租 (Covered Call / Sell Call)</option>
             <option value="Buy LEAPs Call">買入遠期 (Buy LEAPs Call)</option>
-            <option value="Stock Buy">正股建倉 (Stock Cost Basis)</option>
           </select>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs text-gray-400 mb-1">行使價 / 底價 (STRIKE)</label>
-            <input type="number" step="any" v-model.number="form.strike" placeholder="480" class="w-full p-2.5 rounded-lg text-sm font-bold" />
+            <input type="number" step="any" v-model.number="form.strike" required placeholder="480" class="w-full p-2.5 rounded-lg text-sm font-bold" />
           </div>
           <div>
             <label class="block text-xs text-gray-400 mb-1">每股權利金 / 租金 (PREMIUM)</label>
@@ -113,7 +120,7 @@
         <div class="p-3 bg-zinc-900 rounded-xl border border-zinc-800 space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold text-gray-300">結算 / 提前買回 (選填)</span>
-            <label class="text-xs flex items-center gap-1 text-gray-400">
+            <label class="text-xs flex items-center gap-1 text-gray-400 cursor-pointer">
               <input type="checkbox" v-model="form.isClosed" class="rounded" /> 已結算 / 換約平倉
             </label>
           </div>
@@ -129,8 +136,8 @@
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">結算狀態</label>
               <select v-model="form.status" class="w-full p-1.5 text-xs rounded">
-                <option value="expired">自然到期 ($0)</option>
                 <option value="closed">提前獲利了結</option>
+                <option value="expired">自然到期 ($0)</option>
                 <option value="assigned">被行使 / 接貨</option>
               </select>
             </div>
@@ -169,6 +176,7 @@
               <tr>
                 <th class="p-3">開倉 / 到期</th>
                 <th class="p-3">操作詳情</th>
+                <th class="p-3 text-center">持倉天數</th>
                 <th class="p-3 text-right">開倉租金</th>
                 <th class="p-3 text-right">結算 / 滾倉</th>
                 <th class="p-3 text-right">淨利潤 (P&L)</th>
@@ -189,6 +197,11 @@
                   <span class="text-gray-200 font-bold">${{ t.strike }}</span>
                   <span class="text-gray-400 text-[10px] ml-1">({{ t.contracts }}張)</span>
                 </td>
+                <td class="p-3 text-center">
+                  <span class="bg-zinc-800 px-2 py-0.5 rounded text-gray-300 font-bold">
+                    {{ getHoldingDays(t) }} 天
+                  </span>
+                </td>
                 <td class="p-3 text-right text-gray-300">${{ t.openPremium.toFixed(2) }}</td>
                 <td class="p-3 text-right">
                   <span v-if="t.isClosed" class="text-gray-400">
@@ -200,9 +213,14 @@
                   {{ calculatePnL(t) >= 0 ? '+' : '' }}${{ calculatePnL(t).toFixed(2) }}
                 </td>
                 <td class="p-3 text-center">
-                  <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 p-1">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </button>
+                  <div class="flex justify-center gap-2">
+                    <button @click="openEditModal(t)" class="text-gray-400 hover:text-green-400 p-1" title="編輯">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 p-1" title="刪除">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -213,7 +231,6 @@
 
     <!-- TAB 3: 損益日曆 (Calendar View) -->
     <section v-if="currentTab === 'calendar'" class="card p-5 rounded-2xl shadow-xl">
-      <!-- Calendar Controls -->
       <div class="flex justify-between items-center mb-5">
         <button @click="changeMonth(-1)" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold text-gray-300">
           <i class="fa-solid fa-chevron-left mr-1"></i> 上個月
@@ -224,7 +241,6 @@
         </button>
       </div>
 
-      <!-- Days Grid -->
       <div class="grid grid-cols-7 gap-1.5 text-center text-xs">
         <div v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d" class="text-gray-500 font-bold pb-2">{{ d }}</div>
         <div v-for="(day, idx) in calendarDays" :key="idx"
@@ -243,7 +259,6 @@
 
     <!-- TAB 4: 數據分析看板 (Analytics Dashboard) -->
     <section v-if="currentTab === 'analytics'" class="space-y-4">
-      <!-- 4 Top KPI Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="card p-4 rounded-2xl">
           <span class="text-[11px] text-gray-400 flex items-center gap-1">純收租勝率 <i class="fa-regular fa-circle-question"></i></span>
@@ -256,9 +271,9 @@
           <span class="text-[10px] text-gray-500">被指派 / 接正股</span>
         </div>
         <div class="card p-4 rounded-2xl">
-          <span class="text-[11px] text-gray-400 flex items-center gap-1">平均年化報酬 <i class="fa-regular fa-circle-question"></i></span>
+          <span class="text-[11px] text-gray-400 flex items-center gap-1">平均年化報酬 <i class="fa-regular fa-circle-question" title="(淨收益 / 保證金) * (365 / 持倉日數)"></i></span>
           <div class="text-2xl font-extrabold text-green-400 mt-1 font-mono">{{ stats.annualizedReturn }}%</div>
-          <span class="text-[10px] text-gray-500">每條鏈的年化平均</span>
+          <span class="text-[10px] text-gray-500">加權平均年化 (ROC)</span>
         </div>
         <div class="card p-4 rounded-2xl">
           <span class="text-[11px] text-gray-400 flex items-center gap-1">已結算筆數 <i class="fa-regular fa-circle-question"></i></span>
@@ -267,7 +282,7 @@
         </div>
       </div>
 
-      <!-- Leaderboard (標的排行) -->
+      <!-- Leaderboard -->
       <div class="card p-5 rounded-2xl">
         <h3 class="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
           <i class="fa-solid fa-trophy text-yellow-500"></i> 標的排行 (哪檔替你賺最多)
@@ -306,6 +321,97 @@
         </div>
       </div>
     </section>
+
+    <!-- 編輯彈窗 (Edit Modal) -->
+    <div v-if="editingTrade" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+      <div class="card w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-zinc-700 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-pen text-green-400"></i> 編輯合約資料 ({{ editingTrade.ticker }})
+          </h3>
+          <button @click="editingTrade = null" class="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+
+        <form @submit.prevent="saveEdit" class="space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">開倉日期</label>
+              <input type="date" v-model="editingTrade.openDate" required class="w-full p-2 text-xs rounded-lg" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">合約到期日</label>
+              <input type="date" v-model="editingTrade.expiryDate" required class="w-full p-2 text-xs rounded-lg" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">標的代碼</label>
+              <input type="text" v-model="editingTrade.ticker" required class="w-full p-2 text-xs rounded-lg uppercase font-bold" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">張數</label>
+              <input type="number" v-model.number="editingTrade.contracts" min="1" class="w-full p-2 text-xs rounded-lg font-bold" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">行使價</label>
+              <input type="number" step="any" v-model.number="editingTrade.strike" class="w-full p-2 text-xs rounded-lg font-bold" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">操作類型</label>
+              <select v-model="editingTrade.strategy" class="w-full p-2 text-xs rounded-lg">
+                <option value="Sell Put">Sell Put</option>
+                <option value="Covered Call">Covered Call</option>
+                <option value="Buy LEAPs Call">Buy LEAPs Call</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">開倉租金 (Premium)</label>
+              <input type="number" step="any" v-model.number="editingTrade.openPremium" required class="w-full p-2 text-xs rounded-lg font-bold text-green-400" />
+            </div>
+          </div>
+
+          <div class="p-3 bg-zinc-900 rounded-xl border border-zinc-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-gray-300">平倉狀態</span>
+              <label class="text-xs flex items-center gap-1 text-gray-400 cursor-pointer">
+                <input type="checkbox" v-model="editingTrade.isClosed" class="rounded" /> 已結算
+              </label>
+            </div>
+            <div v-if="editingTrade.isClosed" class="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800">
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">平倉日期</label>
+                <input type="date" v-model="editingTrade.closeDate" class="w-full p-1.5 text-xs rounded" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">買回價格</label>
+                <input type="number" step="any" v-model.number="editingTrade.closePrice" class="w-full p-1.5 text-xs rounded font-bold text-yellow-400" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">狀態</label>
+                <select v-model="editingTrade.status" class="w-full p-1.5 text-xs rounded">
+                  <option value="closed">提前買回</option>
+                  <option value="expired">自然到期</option>
+                  <option value="assigned">被行使</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="button" @click="editingTrade = null" class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-gray-300 rounded-xl text-xs font-bold">
+              取消
+            </button>
+            <button type="submit" class="flex-1 py-2.5 btn-green rounded-xl text-xs font-bold">
+              確認儲存
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -313,7 +419,7 @@
 
     createApp({
       setup() {
-        const currentTab = ref('input');
+        const currentTab = ref('ledger');
         const tabs = [
           { id: 'input', name: '記賬錄入', icon: 'fa-solid fa-pen-to-square' },
           { id: 'ledger', name: '持倉總帳', icon: 'fa-solid fa-list-check' },
@@ -323,8 +429,8 @@
 
         const commonTickers = ref(['NFLX', 'NVDA', 'TSM', 'INTC', 'GOOG', 'EXE']);
         const trades = ref([]);
+        const editingTrade = ref(null);
 
-        // Form state
         const getToday = () => new Date().toISOString().split('T')[0];
         const form = ref({
           openDate: getToday(),
@@ -332,7 +438,7 @@
           ticker: 'TSM',
           contracts: 1,
           strategy: 'Covered Call',
-          strike: null,
+          strike: 480,
           openPremium: null,
           isClosed: false,
           closeDate: getToday(),
@@ -340,12 +446,49 @@
           status: 'closed'
         });
 
-        // Load / Save LocalStorage
+        // 常用標的管理
+        const promptAddTicker = () => {
+          const t = prompt('請輸入股票代碼 (如 NVDA, QQQ):');
+          if (t) {
+            const clean = t.trim().toUpperCase();
+            if (clean && !commonTickers.value.includes(clean)) {
+              commonTickers.value.push(clean);
+              saveTickers();
+            }
+          }
+        };
+
+        const removeTicker = (t) => {
+          commonTickers.value = commonTickers.value.filter(item => item !== t);
+          saveTickers();
+        };
+
+        const saveTickers = () => localStorage.setItem('opt_tickers', JSON.stringify(commonTickers.value));
+
+        // 持倉日數計算
+        const getHoldingDays = (t) => {
+          const start = new Date(t.openDate);
+          const end = t.isClosed ? new Date(t.closeDate || t.expiryDate) : new Date();
+          const diffTime = end - start;
+          const days = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          return Math.max(1, days);
+        };
+
+        // 盈虧計算
+        const calculatePnL = (t) => {
+          if (!t.isClosed) return 0;
+          const diff = (t.openPremium - (t.closePrice || 0));
+          return diff * t.contracts * 100;
+        };
+
+        // 本地存儲
         onMounted(() => {
-          const saved = localStorage.getItem('opt_trades');
-          if (saved) trades.value = JSON.parse(saved);
+          const savedTickers = localStorage.getItem('opt_tickers');
+          if (savedTickers) commonTickers.value = JSON.parse(savedTickers);
+
+          const savedTrades = localStorage.getItem('opt_trades');
+          if (savedTrades) trades.value = JSON.parse(savedTrades);
           else {
-            // Preset initial demo trades matching user's spreadsheet
             trades.value = [
               { id: 1, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-07-21', expiryDate: '2026-08-21', strike: 480, contracts: 1, openPremium: 6.6, isClosed: true, closeDate: '2026-08-04', closePrice: 3.1, status: 'closed' },
               { id: 2, ticker: 'TSM', strategy: 'Covered Call', openDate: '2026-08-04', expiryDate: '2026-08-28', strike: 465, contracts: 1, openPremium: 5.5, isClosed: true, closeDate: '2026-08-12', closePrice: 2.75, status: 'closed' },
@@ -358,19 +501,6 @@
         });
 
         const persist = () => localStorage.setItem('opt_trades', JSON.stringify(trades.value));
-
-        const addCommonTicker = () => {
-          const t = prompt('請輸入股票代碼:');
-          if (t && !commonTickers.value.includes(t.toUpperCase())) {
-            commonTickers.value.push(t.toUpperCase());
-          }
-        };
-
-        const calculatePnL = (t) => {
-          if (!t.isClosed) return 0;
-          const diff = (t.openPremium - (t.closePrice || 0));
-          return diff * t.contracts * 100;
-        };
 
         const saveRecord = () => {
           trades.value.unshift({ id: Date.now(), ...form.value, ticker: form.value.ticker.toUpperCase() });
@@ -386,7 +516,21 @@
           }
         };
 
-        // Grouped by Ticker for Ledger
+        // 編輯彈窗邏輯
+        const openEditModal = (t) => {
+          editingTrade.value = JSON.parse(JSON.stringify(t));
+        };
+
+        const saveEdit = () => {
+          const idx = trades.value.findIndex(t => t.id === editingTrade.value.id);
+          if (idx !== -1) {
+            trades.value[idx] = { ...editingTrade.value, ticker: editingTrade.value.ticker.toUpperCase() };
+            persist();
+            editingTrade.value = null;
+          }
+        };
+
+        // 按標的分組
         const groupedTrades = computed(() => {
           const map = {};
           trades.value.forEach(t => {
@@ -397,9 +541,9 @@
           return map;
         });
 
-        // Calendar Logic
+        // 日曆邏輯
         const calendarYear = ref(2026);
-        const calendarMonth = ref(7); // Aug (0-indexed 7)
+        const calendarMonth = ref(7); // 8月 (0-indexed)
         const changeMonth = (delta) => {
           calendarMonth.value += delta;
           if (calendarMonth.value < 0) { calendarMonth.value = 11; calendarYear.value--; }
@@ -412,7 +556,6 @@
           const totalDays = new Date(y, m + 1, 0).getDate();
           const days = [];
 
-          // PnL lookup map by Date (YYYY-MM-DD)
           const pnlMap = {};
           trades.value.filter(t => t.isClosed).forEach(t => {
             const dateKey = t.closeDate || t.expiryDate;
@@ -421,9 +564,7 @@
             pnlMap[dateKey].count++;
           });
 
-          // Empty pads
           for (let i = 0; i < firstDay; i++) days.push({ isCurrentMonth: false, dateNumber: '' });
-          // Month days
           for (let d = 1; d <= totalDays; d++) {
             const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const info = pnlMap[dateStr] || { pnl: 0, count: 0 };
@@ -432,13 +573,15 @@
           return days;
         });
 
-        // Analytics Engine
+        // 統計分析與嚴謹年化收益率計算
         const stats = computed(() => {
           const closed = trades.value.filter(t => t.isClosed);
           const settledCount = closed.length;
-          if (settledCount === 0) return { winRate: 0, assignedRate: 0, annualizedReturn: 0, settledCount: 0, tickerRanking: [], capturedRentRatio: 0, avgHoldingDays: 0 };
+          if (settledCount === 0) return { winRate: '0.0', assignedRate: '0.0', annualizedReturn: '0.0', settledCount: 0, tickerRanking: [], capturedRentRatio: '0.0', avgHoldingDays: 0 };
 
           let wins = 0, assigned = 0, totalRentCaptured = 0, totalDays = 0;
+          let totalAnnualizedSum = 0;
+          let validAnnualizedCount = 0;
           const tickerStats = {};
 
           closed.forEach(t => {
@@ -449,9 +592,17 @@
             const capturedRatio = t.openPremium > 0 ? ((t.openPremium - (t.closePrice || 0)) / t.openPremium) : 0;
             totalRentCaptured += Math.max(0, capturedRatio);
 
-            const start = new Date(t.openDate), end = new Date(t.closeDate || t.expiryDate);
-            const days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)));
+            const days = getHoldingDays(t);
             totalDays += days;
+
+            // 嚴謹年化收益率 (ROC): (PnL / (Strike * 100 * Contracts)) * (365 / days)
+            const capitalAtRisk = (t.strike || 100) * 100 * (t.contracts || 1);
+            if (capitalAtRisk > 0 && days > 0) {
+              const tradeReturn = pnl / capitalAtRisk;
+              const annualized = tradeReturn * (365 / days) * 100;
+              totalAnnualizedSum += annualized;
+              validAnnualizedCount++;
+            }
 
             if (!tickerStats[t.ticker]) tickerStats[t.ticker] = { ticker: t.ticker, totalPnl: 0, count: 0, assigned: 0 };
             tickerStats[t.ticker].totalPnl += pnl;
@@ -464,10 +615,12 @@
             assignedRate: ((item.assigned / item.count) * 100).toFixed(1)
           })).sort((a, b) => b.totalPnl - a.totalPnl);
 
+          const avgAnnualized = validAnnualizedCount > 0 ? (totalAnnualizedSum / validAnnualizedCount).toFixed(1) : '0.0';
+
           return {
             winRate: ((wins / settledCount) * 100).toFixed(1),
             assignedRate: ((assigned / settledCount) * 100).toFixed(1),
-            annualizedReturn: '69.6', // Dynamic benchmark
+            annualizedReturn: avgAnnualized,
             settledCount,
             tickerRanking: ranking,
             capturedRentRatio: ((totalRentCaptured / settledCount) * 100).toFixed(1),
@@ -475,9 +628,10 @@
           };
         });
 
-        // JSON Backup / Restore
+        // 備份與匯入
         const exportData = () => {
-          const blob = new Blob([JSON.stringify(trades.value, null, 2)], { type: 'application/json' });
+          const payload = { trades: trades.value, tickers: commonTickers.value };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -491,8 +645,15 @@
           const reader = new FileReader();
           reader.onload = (event) => {
             try {
-              trades.value = JSON.parse(event.target.result);
+              const parsed = JSON.parse(event.target.result);
+              if (Array.isArray(parsed)) {
+                trades.value = parsed;
+              } else if (parsed.trades) {
+                trades.value = parsed.trades;
+                if (parsed.tickers) commonTickers.value = parsed.tickers;
+              }
               persist();
+              saveTickers();
               alert('匯入成功！');
             } catch (err) {
               alert('檔案格式錯誤');
@@ -502,7 +663,8 @@
         };
 
         return {
-          currentTab, tabs, commonTickers, addCommonTicker, form, saveRecord, deleteTrade,
+          currentTab, tabs, commonTickers, promptAddTicker, removeTicker, form, saveRecord, deleteTrade,
+          editingTrade, openEditModal, saveEdit, getHoldingDays,
           groupedTrades, calculatePnL, calendarYear, calendarMonth, changeMonth, calendarDays,
           stats, exportData, importData
         };
