@@ -32,10 +32,10 @@
       </div>
       <div class="flex gap-2">
         <button @click="exportData" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700">
-          <i class="fa-solid fa-download mr-1"></i> 備份
+          <i class="fa-solid fa-download mr-1"></i> 出
         </button>
         <label class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg border border-gray-700 cursor-pointer">
-          <i class="fa-solid fa-upload mr-1"></i> 匯入
+          <i class="fa-solid fa-upload mr-1"></i> 入
           <input type="file" @change="importData" class="hidden" accept=".json" />
         </label>
       </div>
@@ -55,9 +55,9 @@
     <section v-if="currentTab === 'input'" class="card p-5 rounded-2xl shadow-xl">
       <div class="mb-5 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800">
         <div class="flex justify-between items-center mb-2">
-          <label class="text-xs font-semibold text-gray-400">常用標的 (點擊套用 / 點 × 刪除)</label>
+          <label class="text-xs font-semibold text-gray-400">常用股票</label>
           <button @click="promptAddTicker" class="text-xs text-green-400 hover:underline flex items-center gap-1">
-            <i class="fa-solid fa-plus"></i> 新增標的
+            <i class="fa-solid fa-plus"></i> 新增股票
           </button>
         </div>
         <div class="flex flex-wrap gap-2 items-center">
@@ -88,11 +88,11 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">標的代碼 (TICKER)</label>
+            <label class="block text-xs text-gray-400 mb-1">股票代碼</label>
             <input type="text" v-model="form.ticker" required placeholder="如 NVDA, TSM" class="w-full p-2.5 rounded-lg uppercase text-sm font-bold" />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">張數 (CONTRACTS)</label>
+            <label class="block text-xs text-gray-400 mb-1">張數</label>
             <input type="number" v-model.number="form.contracts" min="1" step="1" required class="w-full p-2.5 rounded-lg text-sm font-bold" />
           </div>
         </div>
@@ -100,20 +100,20 @@
         <div>
           <label class="block text-xs text-gray-400 mb-1">操作類型</label>
           <select v-model="form.strategy" class="w-full p-2.5 rounded-lg text-sm font-semibold">
-            <option value="Covered Call">備兌收租 (Covered Call / Sell Call)</option>
-            <option value="Sell Put">出租收租 (Sell Put / Cash-Secured Put)</option>
-            <option value="Buy LEAPs Call">買入遠期 (Buy LEAPs Call)</option>
+            <option value="Covered Call">備兌收租 (Covered Call)</option>
+            <option value="Sell Put">出租收租 (Cash-Secured Put)</option>
+            <option value="Buy LEAPs Call">買入遠期 (LEAPs Call)</option>
           </select>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">行使價 / 底價 (STRIKE)</label>
-            <input type="number" step="any" v-model.number="form.strike" required placeholder="如 120" class="w-full p-2.5 rounded-lg text-sm font-bold" />
+            <label class="block text-xs text-gray-400 mb-1">行使價</label>
+            <input type="number" step="any" v-model.number="form.strike" required placeholder=" " class="w-full p-2.5 rounded-lg text-sm font-bold" />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">每股權利金 / 租金 (PREMIUM)</label>
-            <input type="number" step="any" v-model.number="form.openPremium" required placeholder="如 3.50" class="w-full p-2.5 rounded-lg text-sm font-bold text-green-400" />
+            <label class="block text-xs text-gray-400 mb-1">權利金</label>
+            <input type="number" step="any" v-model.number="form.openPremium" required placeholder=" " class="w-full p-2.5 rounded-lg text-sm font-bold text-green-400" />
           </div>
         </div>
 
@@ -131,14 +131,14 @@
             </div>
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">買回價格</label>
-              <input type="number" step="any" v-model.number="form.closePrice" placeholder="如 1.20" class="w-full p-1.5 text-xs rounded font-bold text-yellow-400" />
+              <input type="number" step="any" v-model.number="form.closePrice" placeholder=" " class="w-full p-1.5 text-xs rounded font-bold text-yellow-400" />
             </div>
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">結算狀態</label>
               <select v-model="form.status" class="w-full p-1.5 text-xs rounded">
-                <option value="closed">提前獲利了結</option>
-                <option value="expired">自然到期 ($0)</option>
-                <option value="assigned">被行使 / 被Call走</option>
+                <option value="closed">提前獲利</option>
+                <option value="expired">自然到期</option>
+                <option value="assigned">被行權</option>
               </select>
             </div>
           </div>
