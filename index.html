@@ -235,7 +235,7 @@
           </div>
         </div>
 
-        <!-- 🚀 4 欄流暢緊湊表格：完美一行過，徹底避免橫向滾動 -->
+        <!-- 4 欄流暢表格 -->
         <div class="w-full">
           <table class="w-full text-left text-xs table-fixed">
             <thead class="bg-zinc-900/80 text-gray-400 border-b border-zinc-800">
@@ -248,7 +248,6 @@
             </thead>
             <tbody class="divide-y divide-zinc-800/60 font-mono">
               <tr v-for="t in group.trades" :key="t.id" class="hover:bg-zinc-800/30 transition">
-                <!-- 第 1 欄：合約詳情 + 開倉/到期日 上下兩行 -->
                 <td class="p-2.5 sm:p-3 font-sans">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span :class="['px-1.5 py-0.2 rounded text-[10px] font-bold',
@@ -263,38 +262,35 @@
                   </div>
                 </td>
 
-                <!-- 第 2 欄：持倉天數 Badge -->
                 <td class="p-2.5 sm:p-3 text-center">
                   <span class="bg-zinc-800 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] text-gray-300 font-bold whitespace-nowrap">
                     {{ getHoldingDays(t) }}天
                   </span>
                 </td>
 
-                <!-- 第 3 欄：開倉租金 ➔ 買回租金 合併顯示 -->
                 <td class="p-2.5 sm:p-3 text-right">
-                  <div v-if="t.isClosed" class="text-xs">
+                  <div v-if="t.isClosed" class="text-xs whitespace-nowrap">
                     <span class="text-gray-400">${{ Number(t.openPremium).toFixed(2) }}</span>
                     <span class="text-gray-600 text-[10px] mx-0.5">➔</span>
                     <span class="text-yellow-400 font-bold">${{ Number(t.closePrice || 0).toFixed(2) }}</span>
                   </div>
-                  <div v-else class="text-green-400 font-bold text-xs">
+                  <div v-else class="text-green-400 font-bold text-xs whitespace-nowrap">
                     🟢 ${{ Number(t.openPremium).toFixed(2) }}
                   </div>
                 </td>
 
-                <!-- 第 4 欄：淨利潤 + 快捷操作按鈕 -->
                 <td class="p-2.5 sm:p-3 text-right">
-                  <div class="font-extrabold text-xs sm:text-sm leading-tight" :class="calculatePnL(t) >= 0 ? 'text-green-400' : 'text-red-400'">
+                  <div class="font-extrabold text-xs sm:text-sm leading-tight whitespace-nowrap" :class="calculatePnL(t) >= 0 ? 'text-green-400' : 'text-red-400'">
                     {{ calculatePnL(t) >= 0 ? '+' : '' }}${{ calculatePnL(t).toFixed(1) }}
                   </div>
                   <div class="flex justify-end items-center gap-1.5 mt-1">
-                    <button v-if="!t.isClosed" @click="openRollModal(t)" class="text-[9px] px-1 py-0.2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded font-sans font-bold" title="一鍵滾倉">
+                    <button v-if="!t.isClosed" @click="openRollModal(t)" class="text-[9px] px-1 py-0.2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded font-sans font-bold">
                       滾
                     </button>
-                    <button @click="openEditModal(t)" class="text-gray-400 hover:text-green-400 text-xs p-0.5" title="編輯">
+                    <button @click="openEditModal(t)" class="text-gray-400 hover:text-green-400 text-xs p-0.5">
                       <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 text-xs p-0.5" title="刪除">
+                    <button @click="deleteTrade(t.id)" class="text-gray-500 hover:text-red-400 text-xs p-0.5">
                       <i class="fa-solid fa-trash-can"></i>
                     </button>
                   </div>
@@ -306,8 +302,8 @@
       </div>
     </section>
 
-    <!-- TAB 3: 損益日曆 (Calendar View) -->
-    <section v-if="currentTab === 'calendar'" class="card p-4 sm:p-5 rounded-2xl shadow-xl">
+    <!-- TAB 3: 損益日曆 (Calendar View - 完美排版，絕不折行) -->
+    <section v-if="currentTab === 'calendar'" class="card p-3 sm:p-5 rounded-2xl shadow-xl">
       <div class="flex justify-between items-center mb-4">
         <button @click="changeMonth(-1)" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold text-gray-300 transition">
           <i class="fa-solid fa-chevron-left mr-1"></i> 上個月
@@ -321,38 +317,42 @@
         </button>
       </div>
 
-      <!-- 每月 Total 統計橫幅 -->
-      <div class="mb-5 p-3.5 bg-gradient-to-r from-zinc-900 to-zinc-800/80 rounded-xl border border-zinc-700/70 flex justify-between items-center">
-        <div>
-          <span class="text-xs text-gray-400 block font-sans">{{ calendarYear }} 年 {{ calendarMonth + 1 }} 月 投資組合總淨損益</span>
-          <span class="text-[11px] text-gray-500 font-mono">
-            期權租金: ${{ (currentMonthStats.optTotal || 0).toFixed(0) }} | 正股結算: {{ (currentMonthStats.stockTotal || 0) >= 0 ? '+' : '' }}${{ (currentMonthStats.stockTotal || 0).toFixed(0) }}
+      <!-- 每月 Total 統計橫幅：右邊數字絕不換行 -->
+      <div class="mb-4 p-3 sm:p-4 bg-gradient-to-r from-zinc-900 to-zinc-800/80 rounded-xl border border-zinc-700/70 flex justify-between items-center gap-2">
+        <div class="overflow-hidden">
+          <span class="text-xs text-gray-400 block font-sans truncate">{{ calendarYear }} 年 {{ calendarMonth + 1 }} 月 投資組合總損益</span>
+          <span class="text-[11px] text-gray-500 font-mono block truncate">
+            期權: ${{ (currentMonthStats.optTotal || 0).toFixed(0) }} | 正股: {{ (currentMonthStats.stockTotal || 0) >= 0 ? '+' : '' }}${{ (currentMonthStats.stockTotal || 0).toFixed(0) }}
           </span>
         </div>
-        <div class="text-right">
-          <span :class="['text-xl md:text-2xl font-black font-mono tracking-tight', (currentMonthStats.total || 0) >= 0 ? 'text-green-400' : 'text-red-400']">
+        <div class="text-right flex-shrink-0">
+          <span :class="['text-base sm:text-2xl font-black font-mono tracking-tight whitespace-nowrap', (currentMonthStats.total || 0) >= 0 ? 'text-green-400' : 'text-red-400']">
             {{ formatCurrency(currentMonthStats.total) }}
           </span>
         </div>
       </div>
 
       <!-- 日曆網格 -->
-      <div class="grid grid-cols-7 gap-1 sm:gap-1.5 text-center text-xs">
+      <div class="grid grid-cols-7 gap-1 text-center text-xs">
         <div v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d" class="text-gray-500 font-bold pb-1">{{ d }}</div>
         <div v-for="(day, idx) in calendarDays" :key="idx"
-          :class="['h-20 sm:h-24 p-1 sm:p-1.5 rounded-xl border flex flex-col justify-between text-left transition overflow-hidden',
+          :class="['h-20 sm:h-24 p-1 rounded-xl border flex flex-col justify-between text-left transition overflow-hidden',
                    day.isCurrentMonth ? 'bg-zinc-900 border-zinc-800/90' : 'bg-black/20 border-transparent opacity-10']">
           <span class="text-[10px] font-bold text-gray-400">{{ day.dateNumber }}</span>
           
+          <!-- 極簡純數字排版：絕無負號換行斷開 -->
           <div v-if="day.isCurrentMonth && day.totalPnl !== 0" class="flex flex-col items-end gap-0.5 font-mono">
-            <span :class="['text-[11px] sm:text-xs font-black tracking-tight leading-tight', day.totalPnl > 0 ? 'text-green-400' : 'text-red-400']">
+            <span :class="['text-[11px] sm:text-xs font-black tracking-tight leading-none whitespace-nowrap', day.totalPnl > 0 ? 'text-green-400' : 'text-red-400']">
               {{ day.totalPnl > 0 ? '+' : '-' }}${{ Math.abs(Math.round(day.totalPnl)) }}
             </span>
-            <span v-if="day.optPnl !== 0" class="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-gray-300 leading-none">
-              租 {{ day.optPnl > 0 ? '+' : '' }}{{ Math.round(day.optPnl) }}
+            <span v-if="day.optPnl !== 0 && day.stockPnl !== 0" class="text-[8px] sm:text-[9px] text-gray-400 block whitespace-nowrap leading-none scale-90 sm:scale-100 origin-right">
+              租{{ day.optPnl > 0 ? '+' : '' }}{{ Math.round(day.optPnl) }} 股{{ day.stockPnl > 0 ? '+' : '' }}{{ Math.round(day.stockPnl) }}
             </span>
-            <span v-if="day.stockPnl !== 0" class="text-[9px] px-1 py-0.2 rounded bg-amber-950/40 text-yellow-400 leading-none">
-              股 {{ day.stockPnl > 0 ? '+' : '' }}{{ Math.round(day.stockPnl) }}
+            <span v-else-if="day.optPnl !== 0" class="text-[9px] text-gray-400 leading-none whitespace-nowrap">
+              租金落袋
+            </span>
+            <span v-else-if="day.stockPnl !== 0" class="text-[9px] text-yellow-400 leading-none whitespace-nowrap">
+              正股結算
             </span>
           </div>
         </div>
@@ -388,7 +388,6 @@
         </div>
       </div>
 
-      <!-- Charts Row -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="card p-4 rounded-2xl">
           <h3 class="text-xs font-bold text-gray-300 mb-3 flex items-center gap-2">
@@ -409,7 +408,6 @@
         </div>
       </div>
 
-      <!-- Leaderboard -->
       <div class="card p-5 rounded-2xl">
         <h3 class="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
           <i class="fa-solid fa-trophy text-yellow-500"></i> 標的總淨收益排行 (期權收租 + 正股已結算)
@@ -437,7 +435,7 @@
       </div>
     </section>
 
-    <!-- 1. 滾倉彈窗 (Roll Forward Modal) -->
+    <!-- 1. 滾倉彈窗 -->
     <div v-if="rollingTrade" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
       <div class="card w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-zinc-700">
         <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
@@ -559,7 +557,7 @@
       </div>
     </div>
 
-    <!-- 3. 一般編輯彈窗 (Edit Modal) -->
+    <!-- 3. 一般編輯彈窗 -->
     <div v-if="editingTrade" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50">
       <div class="card w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-zinc-700 max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-4 pb-2 border-b border-zinc-800">
@@ -886,7 +884,6 @@
           return map;
         });
 
-        // 預設日曆為當前月份
         const todayDateObj = new Date();
         const calendarYear = ref(todayDateObj.getFullYear());
         const calendarMonth = ref(todayDateObj.getMonth());
